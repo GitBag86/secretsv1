@@ -30,7 +30,13 @@ pub async fn init_pool(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>
         include_str!("../../migrations/015_add_recurring_events.sql"),
     ];
     for sql in migrations {
-        conn.execute_batch(sql)?;
+        if let Err(e) = conn.execute_batch(sql) {
+            let msg = e.to_string();
+            // Ignore "duplicate column" errors (idempotent migrations)
+            if !msg.contains("duplicate column name") {
+                return Err(Box::new(e));
+            }
+        }
     }
     app.manage(DbPool(Arc::new(Mutex::new(conn))));
     Ok(())

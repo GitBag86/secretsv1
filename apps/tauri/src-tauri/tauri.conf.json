@@ -3,7 +3,7 @@
   "productName": "KnowledgeBase",
   "version": "1.0.0",
   "identifier": "com.knowledgebase.app",
-  "build": { "frontendDist": "../out", "devUrl": "http://localhost:3000", "beforeDevCommand": "pnpm dev", "beforeBuildCommand": "pnpm build" },
+  "build": { "frontendDist": "../../apps/frontend/out", "devUrl": "http://localhost:3000", "beforeDevCommand": "cd ../../apps/frontend && npx next dev", "beforeBuildCommand": "cd ../../ && pnpm build" },
   "app": {
     "windows": [{ "title": "KnowledgeBase", "width": 1200, "height": 800, "minWidth": 800, "minHeight": 600, "center": true, "decorations": true }],
     "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost" }

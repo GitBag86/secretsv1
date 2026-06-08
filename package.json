@@ -7,8 +7,8 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,json,md,rs}\"",
-    "tauri:dev": "pnpm --filter=tauri tauri dev",
-    "tauri:build": "pnpm --filter=tauri tauri build",
+    "tauri:dev": "cd apps/tauri/src-tauri && npx tauri dev",
+    "tauri:build": "cd apps/tauri/src-tauri && npx tauri build",
     "test": "vitest run --config apps/frontend/vitest.config.ts",
     "test:watch": "vitest --config apps/frontend/vitest.config.ts",
     "test:rust": "cd apps/tauri/src-tauri && cargo test"
