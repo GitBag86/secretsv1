@@ -1,0 +1,93 @@
+use tauri::State;
+use crate::database::pool::DbPool;
+use crate::crypto::manager::EncryptionManager;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Todo { pub id: String, pub user_id: String, pub title: String, pub description: Option<String>, pub is_completed: bool, pub priority: String, pub due_date: Option<i64>, pub created_at: i64, pub updated_at: i64 }
+
+#[tauri::command]
+pub async fn list_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<Vec<Todo>, String> {
+    let mut todos = {
+        let conn = pool.get().await.map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos ORDER BY is_completed ASC").map_err(|e| e.to_string())?;
+        let mut result = Vec::new();
+        let rows = stmt.query_map([], |r| {
+            Ok(Todo { id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?, description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0, priority: r.get(5)?, due_date: r.get(6)?, created_at: r.get(7)?, updated_at: r.get(8)? })
+        }).map_err(|e| e.to_string())?;
+        for row in rows { if let Ok(t) = row { result.push(t); } }
+        result
+    };
+    for t in &mut todos {
+        t.title = enc.try_decrypt(&t.title).await;
+        if let Some(ref d) = t.description.clone() {
+            t.description = Some(enc.try_decrypt(d).await);
+        }
+    }
+    Ok(todos)
+}
+
+#[tauri::command]
+pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, description: Option<String>, priority: Option<String>, due_date: Option<i64>) -> Result<Todo, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let user_id = "local-user".to_string();
+    let p = priority.unwrap_or_else(|| "medium".into());
+    let et = enc.encrypt_or_pass(&title).await;
+    let ed = if let Some(ref d) = description { Some(enc.encrypt_or_pass(d).await) } else { None };
+    let now = chrono::Utc::now().timestamp();
+    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    conn.execute("INSERT INTO todos (id, user_id, title, description, priority, due_date, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)", (&id, &user_id, &et, &ed, &p, &due_date, now, now)).map_err(|e| e.to_string())?;
+    drop(conn);
+    Ok(Todo { id, user_id, title, description, is_completed: false, priority: p, due_date, created_at: now, updated_at: now })
+}
+
+#[tauri::command]
+pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String, title: Option<String>, description: Option<String>, is_completed: Option<bool>, priority: Option<String>, due_date: Option<i64>) -> Result<Todo, String> {
+    let (existing, conn) = {
+        let conn = pool.get().await.map_err(|e| e.to_string())?;
+        let existing = conn.query_row("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos WHERE id = ?1", [&id], |r| {
+            Ok(Todo { id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?, description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0, priority: r.get(5)?, due_date: r.get(6)?, created_at: r.get(7)?, updated_at: r.get(8)? })
+        }).map_err(|e| e.to_string())?;
+        (existing, conn)
+    };
+    let stored_t = if let Some(ref nt) = title { enc.encrypt_or_pass(nt).await } else { existing.title.clone() };
+    let stored_d = if let Some(ref nd) = description { Some(enc.encrypt_or_pass(nd).await) } else { existing.description.clone() };
+    let resp_t = enc.try_decrypt(&stored_t).await;
+    let resp_d = if let Some(ref d) = stored_d { Some(enc.try_decrypt(d).await) } else { None };
+    let c = is_completed.unwrap_or(existing.is_completed);
+    let p = priority.unwrap_or(existing.priority);
+    let dd = due_date.or(existing.due_date);
+    let now = chrono::Utc::now().timestamp();
+    conn.execute("UPDATE todos SET title=?1, description=?2, is_completed=?3, priority=?4, due_date=?5, updated_at=?6 WHERE id=?7", (&stored_t, &stored_d, c as i64, &p, &dd, now, &id)).map_err(|e| e.to_string())?;
+    drop(conn);
+    Ok(Todo { id, user_id: existing.user_id, title: resp_t, description: resp_d, is_completed: c, priority: p, due_date: dd, created_at: existing.created_at, updated_at: now })
+}
+
+#[tauri::command]
+pub async fn delete_todo(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
+    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM todos WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;
+    drop(conn);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn bulk_update_todos(pool: State<'_, DbPool>, ids: Vec<String>, is_completed: bool) -> Result<(), String> {
+    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now().timestamp();
+    for id in &ids {
+        conn.execute("UPDATE todos SET is_completed=?1, updated_at=?2 WHERE id=?3", (is_completed as i64, now, id)).map_err(|e| e.to_string())?;
+    }
+    drop(conn);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn bulk_delete_todos(pool: State<'_, DbPool>, ids: Vec<String>) -> Result<(), String> {
+    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    for id in &ids {
+        conn.execute("DELETE FROM todos WHERE id = ?1", [id]).map_err(|e| e.to_string())?;
+    }
+    drop(conn);
+    Ok(())
+}

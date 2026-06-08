@@ -1,0 +1,22 @@
+{
+  "name": "knowledge-base",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md,rs}\"",
+    "tauri:dev": "pnpm --filter=tauri tauri dev",
+    "tauri:build": "pnpm --filter=tauri tauri build",
+    "test": "vitest run --config apps/frontend/vitest.config.ts",
+    "test:watch": "vitest --config apps/frontend/vitest.config.ts",
+    "test:rust": "cd apps/tauri/src-tauri && cargo test"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "prettier": "^3.3.0",
+    "@tauri-apps/cli": "^2.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
