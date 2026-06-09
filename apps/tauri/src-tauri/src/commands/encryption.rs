@@ -2,6 +2,7 @@ use tauri::State;
 use crate::database::pool::DbPool;
 use crate::crypto;
 use crate::crypto::manager::EncryptionManager;
+use super::helpers;
 
 const PREFIX: &str = "$enc$";
 
@@ -20,6 +21,7 @@ fn encrypt_val(key: &[u8; 32], val: &str) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn set_master_password(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, password: String) -> Result<serde_json::Value, String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     if password.len() < 8 { return Err("Password must be at least 8 characters".into()); }
     if password.len() > 128 { return Err("Password too long (max 128 chars)".into()); }
     if password.chars().any(|c| c.is_control()) { return Err("Password contains invalid characters".into()); }
@@ -50,6 +52,7 @@ pub async fn get_encryption_salt(pool: State<'_, DbPool>) -> Result<Option<Strin
 
 #[tauri::command]
 pub async fn rotate_encryption_key(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, current_password: String, new_password: String) -> Result<serde_json::Value, String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     if new_password.len() < 8 { return Err("New password must be at least 8 characters".into()); }
     if new_password.len() > 128 { return Err("New password too long (max 128 chars)".into()); }
     if new_password.chars().any(|c| c.is_control()) { return Err("New password contains invalid characters".into()); }
@@ -62,8 +65,11 @@ pub async fn rotate_encryption_key(pool: State<'_, DbPool>, enc: State<'_, Encry
         [],
         |r| r.get(0)
     ).map_err(|_| "No user found".to_string())?;
-    crypto::argon2::verify_password(&current_password, &stored_hash)
+    let valid = crypto::argon2::verify_password(&current_password, &stored_hash)
         .map_err(|_| "Invalid current password".to_string())?;
+    if !valid {
+        return Err("Invalid current password".to_string());
+    }
 
     let salt_hex: String = conn.query_row("SELECT value FROM app_settings WHERE key = 'encryption_salt'", [], |r| r.get(0)).map_err(|_| "No master password set".to_string())?;
     // Derive old key using version-aware KDF (supports both legacy SHA-256 and Argon2id)
@@ -72,10 +78,8 @@ pub async fn rotate_encryption_key(pool: State<'_, DbPool>, enc: State<'_, Encry
     // Generate new key using Argon2id
     let new_salt = crypto::key_derivation::generate_salt();
     let new_versioned_salt = enc.set_key_argon2id(&new_password, &new_salt).await?;
-    let new_key = {
-        let guard = enc.key.lock().await;
-        guard.ok_or_else(|| "EncryptionManager key not set after Argon2id derivation".to_string())?
-    };
+    let new_key = enc.get_key_copy().await
+        .ok_or_else(|| "EncryptionManager key not set after Argon2id derivation".to_string())?;
     // Hash the new password for storage
     let new_hash = crypto::argon2::hash_password(&new_password).map_err(|e| e.to_string())?;
     let mut note_count = 0usize;

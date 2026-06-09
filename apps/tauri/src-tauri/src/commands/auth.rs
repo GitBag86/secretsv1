@@ -46,14 +46,32 @@ pub async fn login(pool: State<'_, DbPool>, email: String, password: String) -> 
     if password.len() > 128 { return Err("Password too long".into()); }
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     let row: (String, String, Option<String>, String, i64, i64) = conn.query_row("SELECT id, email, name, password_hash, created_at, updated_at FROM users WHERE email = ?1", [&email], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))).map_err(|e| e.to_string())?;
-    crypto::argon2::verify_password(&password, &row.3).map_err(|_| "Invalid password".to_string())?;
+    let valid = crypto::argon2::verify_password(&password, &row.3).map_err(|_| "Invalid password".to_string())?;
+    if !valid {
+        return Err("Invalid password".to_string());
+    }
     Ok(AuthResponse { user: UserResponse { id: row.0, email: row.1, name: row.2, created_at: row.4, updated_at: row.5 }, token: "local-session".into() })
 }
 
 #[tauri::command]
 pub async fn unlock_database(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, password: String) -> Result<serde_json::Value, String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
-    let salt_hex: String = conn.query_row("SELECT value FROM app_settings WHERE key = 'encryption_salt'", [], |r| r.get(0)).map_err(|_| "No master password set".to_string())?;
+
+    // First, verify the password against the stored hash
+    let stored_hash: String = conn.query_row(
+        "SELECT password_hash FROM users LIMIT 1",
+        [],
+        |r| r.get(0)
+    ).map_err(|_| "No master password set. Please register first.".to_string())?;
+
+    let valid = crypto::argon2::verify_password(&password, &stored_hash)
+        .map_err(|e| format!("Password verification failed: {}", e))?;
+    if !valid {
+        return Err("Invalid master password".to_string());
+    }
+
+    // Password is correct — derive the encryption key from stored salt
+    let salt_hex: String = conn.query_row("SELECT value FROM app_settings WHERE key = 'encryption_salt'", [], |r| r.get(0)).map_err(|_| "No encryption salt found".to_string())?;
     enc.set_key_from_stored_salt(&password, &salt_hex).await.map_err(|e| format!("Key derivation failed: {}", e))?;
     let now = chrono::Utc::now().timestamp();
     conn.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('session_unlocked_at', ?1, ?2)", (now.to_string(), now)).map_err(|e| e.to_string())?;

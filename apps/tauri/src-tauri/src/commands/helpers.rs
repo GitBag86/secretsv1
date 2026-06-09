@@ -1,4 +1,44 @@
 use crate::crypto::manager::EncryptionManager;
+use crate::database::pool::DbPool;
+
+/// Verify that the database is unlocked and the session has not expired.
+/// If the session has expired, the encryption key is cleared to enforce the lock.
+pub async fn require_valid_session(pool: &DbPool, enc: &EncryptionManager) -> Result<(), String> {
+    // First check if the encryption manager is locked
+    if enc.is_locked().await {
+        return Err("Database is locked. Unlock first.".to_string());
+    }
+
+    // Then check if the session has expired
+    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    let unlocked_at_str: Result<String, _> = conn.query_row(
+        "SELECT value FROM app_settings WHERE key = 'session_unlocked_at'",
+        [],
+        |r| r.get(0)
+    );
+
+    match unlocked_at_str {
+        Ok(unlocked_at_str) => {
+            let unlocked_at: i64 = unlocked_at_str.parse().map_err(|_| "Invalid timestamp".to_string())?;
+            let timeout: i64 = conn.query_row(
+                "SELECT COALESCE((SELECT value FROM app_settings WHERE key = 'session_timeout'), '15')",
+                [],
+                |r| r.get::<_, String>(0)
+            ).map(|v| v.parse().unwrap_or(15)).unwrap_or(15);
+            let elapsed = chrono::Utc::now().timestamp() - unlocked_at;
+            if elapsed >= timeout * 60 {
+                // Session expired — clear the encryption key to enforce the lock
+                drop(conn);
+                enc.clear_key().await;
+                return Err("Session expired. Please unlock the database again.".to_string());
+            }
+            Ok(())
+        }
+        // No session_unlocked_at row — allow (legacy support for existing data)
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
 
 /// Strip HTML tags from a string (simple tag removal).
 pub fn strip_html(s: &str) -> String {

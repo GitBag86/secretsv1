@@ -232,6 +232,9 @@ pub async fn export_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 
 #[tauri::command]
 pub async fn import_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, data: String) -> Result<ImportResult, String> {
+    if enc.is_locked().await {
+        return Err("Database is locked. Unlock to import data.".into());
+    }
     let export: ExportData = serde_json::from_str(&data).map_err(|e| format!("Invalid JSON: {}", e))?;
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     let mut result = ImportResult {

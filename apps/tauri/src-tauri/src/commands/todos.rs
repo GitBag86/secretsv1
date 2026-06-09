@@ -6,6 +6,7 @@ use crate::commands::recurring_todos::advance_recurring_todo;
 use crate::commands::helpers;
 use serde::{Deserialize, Serialize};
 
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Todo { pub id: String, pub user_id: String, pub title: String, pub description: Option<String>, pub is_completed: bool, pub priority: String, pub due_date: Option<i64>, pub created_at: i64, pub updated_at: i64 }
 
@@ -41,6 +42,7 @@ pub async fn list_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManage
 
 #[tauri::command]
 pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, description: Option<String>, priority: Option<String>, due_date: Option<i64>) -> Result<Todo, String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     validate_todo_title(&title)?;
     if let Some(ref d) = description { validate_todo_description(d)?; }
     let valid_priorities = ["low", "medium", "high"];
@@ -64,6 +66,7 @@ pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 
 #[tauri::command]
 pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String, title: Option<String>, description: Option<String>, is_completed: Option<bool>, priority: Option<String>, due_date: Option<i64>) -> Result<Todo, String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     if let Some(ref t) = title { validate_todo_title(t)?; }
     if let Some(ref d) = description { validate_todo_description(d)?; }
     if let Some(ref p) = priority {

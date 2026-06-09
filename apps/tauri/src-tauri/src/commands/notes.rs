@@ -60,6 +60,7 @@ pub async fn get_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>
 
 #[tauri::command]
 pub async fn create_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, content: String, notebook_id: Option<String>) -> Result<Note, String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     validate_title(&title)?;
     validate_content(&content)?;
     let id = uuid::Uuid::new_v4().to_string();
@@ -79,6 +80,7 @@ pub async fn create_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 
 #[tauri::command]
 pub async fn update_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String, title: Option<String>, content: Option<String>, is_pinned: Option<bool>, is_archived: Option<bool>, notebook_id: Option<String>) -> Result<Note, String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     if let Some(ref t) = title { validate_title(t)?; }
     if let Some(ref c) = content { validate_content(c)?; }
     let (existing, conn) = {

@@ -36,6 +36,9 @@ pub async fn attach_file(
     mime_type: String,
     data_base64: String,
 ) -> Result<Attachment, String> {
+    if enc.is_locked().await {
+        return Err("Database is locked. Unlock to attach files.".into());
+    }
     let id = uuid::Uuid::new_v4().to_string();
     let user_id = "local-user".to_string();
     let now = chrono::Utc::now().timestamp();

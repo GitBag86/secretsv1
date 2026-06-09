@@ -28,14 +28,14 @@ export default function CalendarPage() {
     events.map((e) => ({
       id: e.id,
       title: e.title,
-      start: new Date(e.start_time).toISOString(),
-      end: new Date(e.end_time).toISOString(),
+      start: new Date(e.start_time * 1000).toISOString(),
+      end: new Date(e.end_time * 1000).toISOString(),
       allDay: e.all_day,
       backgroundColor: e.color,
       borderColor: e.color,
       textColor: "#fff",
       extendedProps: { description: e.description },
-      ...(e.rrule ? { rrule: { freq: parseRrule(e.rrule), dtstart: new Date(e.start_time).toISOString() } } : {}),
+      ...(e.rrule ? { rrule: { freq: parseRrule(e.rrule), dtstart: new Date(e.start_time * 1000).toISOString() } } : {}),
     })),
     [events]
   );
@@ -71,8 +71,8 @@ export default function CalendarPage() {
 
   const handleSave = async () => {
     if (!title.trim()) return;
-    const start = new Date(startStr).getTime();
-    const end = new Date(endStr).getTime();
+    const start = Math.floor(new Date(startStr).getTime() / 1000);
+    const end = Math.floor(new Date(endStr).getTime() / 1000);
     const rrule = recurType === "none" ? undefined : freqToRrule(recurType, start);
     if (editingId) {
       await update.mutateAsync({ id: editingId, title, description, start_time: start, end_time: end, all_day: allDay, color, rrule });
@@ -99,8 +99,9 @@ export default function CalendarPage() {
   };
 
   const handleEventDrop = async (info: any) => {
-    const diff = info.event.end!.getTime() - info.event.start!.getTime();
-    await update.mutateAsync({ id: info.event.id, start_time: info.event.start!.getTime(), end_time: info.event.start!.getTime() + diff });
+    const startSec = Math.floor(info.event.start!.getTime() / 1000);
+    const endSec = Math.floor(info.event.end!.getTime() / 1000);
+    await update.mutateAsync({ id: info.event.id, start_time: startSec, end_time: endSec });
   };
 
   const today = () => calendarRef.current?.getApi().today();

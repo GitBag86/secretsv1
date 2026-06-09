@@ -17,6 +17,7 @@ interface AuthState {
   logout: () => void;
   lock: () => Promise<void>;
   unlock: (password: string) => Promise<void>;
+  setupMasterPassword: (password: string) => Promise<void>;
 }
 
 export const useAuth = create<AuthState>((set) => ({
@@ -37,6 +38,11 @@ export const useAuth = create<AuthState>((set) => ({
   },
   unlock: async (password: string) => {
     await api.auth.unlock(password);
+    await api.auth.refreshSession();
+    set({ isUnlocked: true, sessionElapsed: 0 });
+  },
+  setupMasterPassword: async (password: string) => {
+    await api.encryption.setMasterPassword(password);
     await api.auth.refreshSession();
     set({ isUnlocked: true, sessionElapsed: 0 });
   },

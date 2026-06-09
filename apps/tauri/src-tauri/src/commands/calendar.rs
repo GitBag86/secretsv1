@@ -40,6 +40,7 @@ pub async fn list_calendar_events(pool: State<'_, DbPool>, enc: State<'_, Encryp
 
 #[tauri::command]
 pub async fn create_calendar_event(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, start_time: i64, end_time: i64, description: Option<String>, all_day: Option<bool>, color: Option<String>, rrule: Option<String>) -> Result<CalendarEvent, String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     validate_event_title(&title)?;
     if let Some(ref d) = description { validate_event_description(d)?; }
     if start_time >= end_time { return Err("start_time must be before end_time".into()); }
@@ -60,6 +61,7 @@ pub async fn create_calendar_event(pool: State<'_, DbPool>, enc: State<'_, Encry
 
 #[tauri::command]
 pub async fn update_calendar_event(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String, title: Option<String>, description: Option<String>, start_time: Option<i64>, end_time: Option<i64>, all_day: Option<bool>, color: Option<String>, rrule: Option<String>) -> Result<CalendarEvent, String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     if let Some(ref t) = title { validate_event_title(t)?; }
     if let Some(ref d) = description { validate_event_description(d)?; }
     let (existing, conn) = {

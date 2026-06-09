@@ -42,6 +42,11 @@ impl EncryptionManager {
         self.key.lock().await.is_none()
     }
 
+    /// Get a copy of the current encryption key, if set.
+    pub async fn get_key_copy(&self) -> Option<[u8; 32]> {
+        *self.key.lock().await
+    }
+
     pub async fn encrypt(&self, plaintext: &str) -> Result<String, String> {
         let guard = self.key.lock().await;
         let key = guard.as_ref().ok_or_else(|| "Database locked, cannot encrypt".to_string())?;
@@ -79,13 +84,9 @@ impl EncryptionManager {
         self.decrypt_to_string(data).await.unwrap_or_else(|_| "[encrypted]".to_string())
     }
 
-    /// Encrypt plaintext, returning the plaintext unchanged if the database is locked.
-    /// WARNING: If encryption fails for any reason other than being locked, this propagates the error
-    /// instead of silently storing unencrypted data. Previously this silently fell back to plaintext.
+    /// Encrypt plaintext. Returns an error if the database is locked (fail-closed).
+    /// This prevents any sensitive data from being stored unencrypted.
     pub async fn encrypt_or_pass(&self, plaintext: &str) -> Result<String, String> {
-        if self.is_locked().await {
-            return Ok(plaintext.to_string());
-        }
         self.encrypt(plaintext).await
     }
 }
@@ -120,9 +121,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn encrypt_or_pass_when_locked() {
+    async fn encrypt_or_pass_when_locked_returns_error() {
         let mgr = EncryptionManager::new();
-        assert_eq!(mgr.encrypt_or_pass("hello").await.unwrap(), "hello");
+        assert!(mgr.encrypt_or_pass("hello").await.is_err());
     }
 
     #[tokio::test]

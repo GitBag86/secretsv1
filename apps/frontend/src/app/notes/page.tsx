@@ -2,7 +2,7 @@
 import { useNotes, useNotebooks, useTags, useNoteTags } from "@/hooks";
 import { NotebookSidebar } from "@/components/notebook-sidebar";
 import { NavHeader } from "@/components/nav-header";
-import { TemplatePicker from "@/components/template-picker";
+import { TemplatePicker } from "@/components/template-picker";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";

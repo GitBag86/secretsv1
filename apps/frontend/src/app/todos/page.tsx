@@ -74,26 +74,6 @@ export default function TodosPage() {
 
   const queryClient = useQueryClient();
   const titleRef = useRef<HTMLInputElement>(null);
-  const filteredRef = useRef(filtered);
-  filteredRef.current = filtered;
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === "n") {
-        e.preventDefault();
-        titleRef.current?.focus();
-      }
-      if (e.ctrlKey && e.key === "e") {
-        e.preventDefault();
-        const current = filteredRef.current;
-        if (current.length > 0) {
-          setEditingTagTodo((prev) => (prev === current[0].id ? null : current[0].id));
-        }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
 
   const handleCreate = async () => {
     if (!title.trim()) return;
@@ -154,6 +134,28 @@ export default function TodosPage() {
     });
     return result;
   }, [todos, filter, sort, search, selectedTagId, todoTagMap]);
+
+  // Ref to latest filtered list for keyboard shortcuts
+  const filteredRef = useRef(filtered);
+  filteredRef.current = filtered;
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "n") {
+        e.preventDefault();
+        titleRef.current?.focus();
+      }
+      if (e.ctrlKey && e.key === "e") {
+        e.preventDefault();
+        const current = filteredRef.current;
+        if (current.length > 0) {
+          setEditingTagTodo((prev) => (prev === current[0].id ? null : current[0].id));
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const activeCount = todos.filter((t) => !t.is_completed).length;
   const completedIds = todos.filter((t) => t.is_completed).map((t) => t.id);
