@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks";
 import { api } from "@/lib/api";
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export default function SettingsPage() {
   const { user, logout, isUnlocked, lock, sessionMinutes, setSessionMinutes, sessionElapsed } = useAuth();
@@ -16,8 +17,109 @@ export default function SettingsPage() {
   const [newPw, setNewPw] = useState("");
   const [rotating, setRotating] = useState(false);
   const [rotateResult, setRotateResult] = useState<string | null>(null);
+  const [syncUrl, setSyncUrl] = useState("");
+  const [syncKey, setSyncKey] = useState("");
+  const [configuring, setConfiguring] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncConfigured, setSyncConfigured] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  const [syncPending, setSyncPending] = useState(0);
+  const [syncResult, setSyncResult] = useState<any>(null);
+  const queryClient = useQueryClient();
+  const { data: allTags = [] } = useQuery({ queryKey: ["tags"], queryFn: api.tags.list });
+  const [editTagId, setEditTagId] = useState<string | null>(null);
+  const [editTagName, setEditTagName] = useState("");
+  const [editTagColor, setEditTagColor] = useState("#6b7280");
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#6b7280");
+
+  const tagUpdate = useMutation({
+    mutationFn: ({ id, name, color }: { id: string; name: string; color: string }) =>
+      api.tags.update(id, { name, color }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      setEditTagId(null);
+    },
+  });
+
+  const tagDelete = useMutation({
+    mutationFn: api.tags.delete,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tags"] }),
+  });
+
+  const tagCreate = useMutation({
+    mutationFn: (data: { name: string; color?: string }) => api.tags.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      setNewTagName("");
+      setNewTagColor("#6b7280");
+    },
+  });
 
   useEffect(() => setMounted(true), []);
+
+  // Load sync config on mount
+  useEffect(() => {
+    if (!isUnlocked) return;
+    api.sync.status().then((s) => {
+      setSyncPending(s.pending);
+      setSyncConfigured(s.configured);
+    }).catch(() => {});
+    api.sync.getConfig().then((cfg) => {
+      if (cfg.url) setSyncUrl(cfg.url);
+      setSyncConfigured(!!cfg.url);
+    }).catch(() => {});
+  }, [isUnlocked]);
+
+  const handleConfigureSync = async () => {
+    setConfiguring(true);
+    setSyncMessage(null);
+    try {
+      const res = await api.sync.configure(syncUrl, syncKey);
+      setSyncConfigured(true);
+      setSyncMessage(res.connection_ok ? "Connection OK! Sync configured." : "Saved but couldn't connect to Supabase. Check your URL and key.");
+    } catch (e: any) {
+      setSyncMessage(`Error: ${e}`);
+    }
+    setConfiguring(false);
+  };
+
+  const handleSyncPush = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await api.sync.push();
+      setSyncResult(res);
+      setSyncPending(res.remaining || 0);
+    } catch (e: any) {
+      setSyncResult({ error: String(e) });
+    }
+    setSyncing(false);
+  };
+
+  const handleSyncPull = async () => {
+    setPulling(true);
+    setSyncResult(null);
+    try {
+      const res = await api.sync.pull();
+      setSyncResult(res);
+    } catch (e: any) {
+      setSyncResult({ error: String(e) });
+    }
+    setPulling(false);
+  };
+
+  const handleSyncStatus = async () => {
+    setSyncResult(null);
+    try {
+      const res = await api.sync.status();
+      setSyncResult(res);
+      setSyncPending(res.pending);
+    } catch (e: any) {
+      setSyncResult({ error: String(e) });
+    }
+  };
 
   const saveTimeout = async () => {
     const m = parseInt(timeoutInput, 10);
@@ -26,6 +128,11 @@ export default function SettingsPage() {
     await api.auth.setSessionTimeout(m);
     setSessionMinutes(m);
     setSaving(false);
+  };
+
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) return;
+    tagCreate.mutate({ name: newTagName.trim(), color: newTagColor });
   };
 
   const handleRotate = async () => {
@@ -124,12 +231,177 @@ export default function SettingsPage() {
 
         <section className="rounded-lg border bg-card p-6 space-y-4">
           <h2 className="text-lg font-semibold">Sync</h2>
-          <p className="text-sm text-muted-foreground">
-            Sync your data across devices using Supabase. Configure in your environment variables.
-          </p>
-          <button disabled className="bg-primary/50 text-primary-foreground px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed">
-            Sync Status — Coming Soon
-          </button>
+          {isUnlocked && (
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={syncUrl}
+                  onChange={(e) => setSyncUrl(e.target.value)}
+                  placeholder="https://your-project.supabase.co"
+                  className="flex-1 p-2 text-sm border rounded-md bg-background"
+                />
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={syncKey}
+                  onChange={(e) => setSyncKey(e.target.value)}
+                  placeholder="Supabase anon key"
+                  className="flex-1 p-2 text-sm border rounded-md bg-background"
+                />
+                <button
+                  onClick={configuring ? undefined : handleConfigureSync}
+                  disabled={configuring || !syncUrl || !syncKey}
+                  className="bg-primary text-primary-foreground px-3 py-2 rounded-md text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {configuring ? "Testing..." : "Save"}
+                </button>
+              </div>
+              {syncMessage && (
+                <p className={`text-xs ${syncMessage.includes("Error") || syncMessage.includes("Failed") ? "text-destructive" : "text-green-600"}`}>
+                  {syncMessage}
+                </p>
+              )}
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">
+                  {syncConfigured ? "✓ Configured" : "Not configured"}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={syncing ? undefined : handleSyncPush}
+                  disabled={syncing || !syncConfigured}
+                  className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {syncing ? "Syncing..." : `Push Changes (${syncPending} pending)`}
+                </button>
+                <button
+                  onClick={pulling ? undefined : handleSyncPull}
+                  disabled={pulling || !syncConfigured}
+                  className="border px-3 py-1.5 rounded-md text-xs font-medium hover:bg-accent disabled:opacity-50"
+                >
+                  {pulling ? "Pulling..." : "Pull Changes"}
+                </button>
+                <button
+                  onClick={handleSyncStatus}
+                  className="border px-3 py-1.5 rounded-md text-xs font-medium hover:bg-accent"
+                >
+                  Refresh Status
+                </button>
+              </div>
+              {syncResult && (
+                <pre className="text-xs text-muted-foreground bg-muted/30 p-2 rounded overflow-x-auto">
+                  {JSON.stringify(syncResult, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
+          {!isUnlocked && (
+            <p className="text-sm text-muted-foreground">
+              <a href="/unlock" className="text-primary hover:underline">Unlock</a> the database to configure sync.
+            </p>
+          )}
+        </section>
+
+        <section className="rounded-lg border bg-card p-6 space-y-4">
+          <h2 className="text-lg font-semibold">Tags</h2>
+          <p className="text-sm text-muted-foreground">Manage all tags used across notes and todos.</p>
+
+          {/* Create new tag */}
+          <div className="flex items-center gap-2">
+            <input
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreateTag()}
+              placeholder="New tag name..."
+              className="flex-1 p-2 text-sm border rounded-md bg-background"
+            />
+            <input
+              type="color"
+              value={newTagColor}
+              onChange={(e) => setNewTagColor(e.target.value)}
+              className="w-9 h-9 p-0.5 border rounded cursor-pointer"
+              title="Tag color"
+            />
+            <button
+              onClick={handleCreateTag}
+              disabled={!newTagName.trim() || tagCreate.isPending}
+              className="bg-primary text-primary-foreground px-3 py-2 rounded-md text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
+            >
+              {tagCreate.isPending ? "..." : "Add Tag"}
+            </button>
+          </div>
+
+          {/* Tag list */}
+          {allTags.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No tags yet. Create one above!</p>
+          ) : (
+            <div className="space-y-1.5">
+              {allTags.map((tag) => {
+                const isEditing = editTagId === tag.id;
+                return (
+                  <div key={tag.id} className="flex items-center gap-2 rounded-md border p-2.5">
+                    <div
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: tag.color }}
+                    />
+                    {isEditing ? (
+                      <>
+                        <input
+                          value={editTagName}
+                          onChange={(e) => setEditTagName(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && tagUpdate.mutate({ id: tag.id, name: editTagName, color: editTagColor })}
+                          className="flex-1 p-1 text-sm border rounded-md bg-background"
+                        />
+                        <input
+                          type="color"
+                          value={editTagColor}
+                          onChange={(e) => setEditTagColor(e.target.value)}
+                          className="w-8 h-8 p-0.5 border rounded cursor-pointer"
+                        />
+                        <button
+                          onClick={() => tagUpdate.mutate({ id: tag.id, name: editTagName, color: editTagColor })}
+                          disabled={tagUpdate.isPending}
+                          className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditTagId(null)}
+                          className="text-xs px-2 py-1 rounded border hover:bg-accent"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 text-sm font-medium">{tag.name}</span>
+                        <span className="text-xs text-muted-foreground">{tag.color}</span>
+                        <button
+                          onClick={() => { setEditTagId(tag.id); setEditTagName(tag.name); setEditTagColor(tag.color); }}
+                          className="text-xs px-2 py-1 rounded border hover:bg-accent"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Delete tag "${tag.name}"? This will remove it from all notes and todos.`)) {
+                              tagDelete.mutate(tag.id);
+                            }
+                          }}
+                          disabled={tagDelete.isPending}
+                          className="text-xs px-2 py-1 rounded border text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section className="rounded-lg border bg-card p-6 space-y-4">

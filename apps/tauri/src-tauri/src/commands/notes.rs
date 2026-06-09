@@ -1,6 +1,7 @@
 use tauri::State;
 use crate::database::pool::DbPool;
 use crate::crypto::manager::EncryptionManager;
+use crate::sync::enqueue_sync;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -49,6 +50,8 @@ pub async fn create_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     let now = chrono::Utc::now().timestamp();
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("INSERT INTO notes (id, user_id, notebook_id, title, content, word_count, reading_time, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", (&id, &user_id, &notebook_id, &et, &ec, wc, rt, now, now)).map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({"id": &id, "title": &title, "content": &content, "notebook_id": &notebook_id, "word_count": wc, "reading_time": rt, "created_at": now, "updated_at": now});
+    enqueue_sync(&conn, "note", &id, "create", Some(&payload.to_string())).ok();
     drop(conn);
     Ok(Note { id, user_id, notebook_id, title, content, word_count: wc, reading_time: rt, is_pinned: false, is_archived: false, created_at: now, updated_at: now })
 }
@@ -64,6 +67,8 @@ pub async fn update_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     };
     let stored_title = if let Some(ref nt) = title { enc.encrypt_or_pass(nt).await } else { existing.title.clone() };
     let stored_content = if let Some(ref nc) = content { enc.encrypt_or_pass(nc).await } else { existing.content.clone() };
+    let resp_title = enc.try_decrypt(&stored_title).await;
+    let resp_content = enc.try_decrypt(&stored_content).await;
     let wc = content.as_ref().map(|c| c.split_whitespace().count() as i64).unwrap_or(existing.word_count);
     let rt = (wc / 200).max(1);
     let p = is_pinned.unwrap_or(existing.is_pinned);
@@ -71,9 +76,9 @@ pub async fn update_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     let nb = notebook_id.or(existing.notebook_id);
     let now = chrono::Utc::now().timestamp();
     conn.execute("UPDATE notes SET title=?1, content=?2, word_count=?3, reading_time=?4, is_pinned=?5, is_archived=?6, notebook_id=?7, updated_at=?8 WHERE id=?9", (&stored_title, &stored_content, wc, rt, p as i64, a as i64, &nb, now, &id)).map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({"id": &id, "title": &resp_title, "content": &resp_content, "notebook_id": &nb, "word_count": wc, "reading_time": rt, "is_pinned": p, "is_archived": a, "updated_at": now});
+    enqueue_sync(&conn, "note", &id, "update", Some(&payload.to_string())).ok();
     drop(conn);
-    let resp_title = enc.try_decrypt(&stored_title).await;
-    let resp_content = enc.try_decrypt(&stored_content).await;
     Ok(Note { id, user_id: existing.user_id, notebook_id: nb, title: resp_title, content: resp_content, word_count: wc, reading_time: rt, is_pinned: p, is_archived: a, created_at: existing.created_at, updated_at: now })
 }
 
@@ -81,6 +86,7 @@ pub async fn update_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 pub async fn delete_note(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM notes WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;
+    enqueue_sync(&conn, "note", &id, "delete", None).ok();
     drop(conn);
     Ok(())
 }

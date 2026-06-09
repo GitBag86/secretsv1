@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { User, Note, Todo, CalendarEvent, Notebook } from "@/types";
+import type { User, Note, Todo, CalendarEvent, Notebook, Tag, Attachment, RecurringTodo } from "@/types";
 
 export const api = {
   auth: {
@@ -61,9 +61,45 @@ export const api = {
       invoke<Notebook>("update_notebook", { id, ...data }),
     delete: (id: string) => invoke<void>("delete_notebook", { id }),
   },
+  tags: {
+    list: () => invoke<Tag[]>("list_tags"),
+    create: (data: { name: string; color?: string }) =>
+      invoke<Tag>("create_tag", data),
+    update: (id: string, data: { name?: string; color?: string }) =>
+      invoke<Tag>("update_tag", { id, ...data }),
+    delete: (id: string) => invoke<void>("delete_tag", { id }),
+    getNoteTags: (noteId: string) => invoke<Tag[]>("get_note_tags", { noteId }),
+    setNoteTags: (noteId: string, tagIds: string[]) =>
+      invoke<void>("set_note_tags", { noteId, tagIds }),
+    getNotesWithTag: (tagId: string) => invoke<string[]>("get_notes_with_tag", { tagId }),
+    listAllNoteTags: () => invoke<{ note_id: string; tag_id: string }[]>("list_all_note_tags"),
+    getTodoTags: (todoId: string) => invoke<Tag[]>("get_todo_tags", { todoId }),
+    setTodoTags: (todoId: string, tagIds: string[]) =>
+      invoke<void>("set_todo_tags", { todoId, tagIds }),
+    getTodosWithTag: (tagId: string) => invoke<string[]>("get_todos_with_tag", { tagId }),
+    listAllTodoTags: () => invoke<{ todo_id: string; tag_id: string }[]>("list_all_todo_tags"),
+  },
+  attachments: {
+    list: (noteId: string) => invoke<Attachment[]>("list_note_attachments", { noteId }),
+    attach: (noteId: string, filename: string, mimeType: string, dataBase64: string) =>
+      invoke<Attachment>("attach_file", { noteId, filename, mimeType, dataBase64 }),
+    delete: (id: string) => invoke<void>("delete_attachment", { id }),
+    open: (id: string) => invoke<void>("open_attachment", { id }),
+    getAllCounts: () => invoke<{ note_id: string; count: number }[]>("get_all_attachment_counts"),
+  },
+  recurringTodos: {
+    set: (todoId: string, recurrenceRule: string) =>
+      invoke<RecurringTodo>("set_recurrence", { todoId, recurrenceRule }),
+    remove: (todoId: string) => invoke<void>("remove_recurrence", { todoId }),
+    list: () => invoke<RecurringTodo[]>("list_recurring_todos"),
+  },
   sync: {
-    push: () => invoke<{ synced: number }>("sync_push"),
-    pull: () => invoke<{ synced: number }>("sync_pull"),
-    status: () => invoke<{ pending: number; last_sync: number | null }>("sync_status"),
+    push: () => invoke<{ pushed: number; total: number; remaining: number; errors: string[] }>("sync_push"),
+    pull: () => invoke<{ pulled: number; pending: number; errors: string[] }>("sync_pull"),
+    status: () => invoke<{ pending: number; last_sync: number | null; configured: boolean }>("sync_status"),
+    configure: (url: string, key: string) =>
+      invoke<{ configured: boolean; connection_ok: boolean }>("configure_sync", { url, key }),
+    getConfig: () =>
+      invoke<{ url: string | null; has_key: boolean }>("get_sync_config"),
   },
 };

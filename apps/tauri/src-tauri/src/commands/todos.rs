@@ -1,6 +1,8 @@
 use tauri::State;
 use crate::database::pool::DbPool;
 use crate::crypto::manager::EncryptionManager;
+use crate::sync::enqueue_sync;
+use crate::commands::recurring_todos::advance_recurring_todo;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -37,6 +39,8 @@ pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     let now = chrono::Utc::now().timestamp();
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("INSERT INTO todos (id, user_id, title, description, priority, due_date, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)", (&id, &user_id, &et, &ed, &p, &due_date, now, now)).map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({"id": &id, "title": &title, "description": &description, "priority": &p, "due_date": &due_date, "is_completed": false, "created_at": now, "updated_at": now});
+    enqueue_sync(&conn, "todo", &id, "create", Some(&payload.to_string())).ok();
     drop(conn);
     Ok(Todo { id, user_id, title, description, is_completed: false, priority: p, due_date, created_at: now, updated_at: now })
 }
@@ -54,11 +58,30 @@ pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     let stored_d = if let Some(ref nd) = description { Some(enc.encrypt_or_pass(nd).await) } else { existing.description.clone() };
     let resp_t = enc.try_decrypt(&stored_t).await;
     let resp_d = if let Some(ref d) = stored_d { Some(enc.try_decrypt(d).await) } else { None };
-    let c = is_completed.unwrap_or(existing.is_completed);
+    let mut c = is_completed.unwrap_or(existing.is_completed);
+    let mut dd = due_date.or(existing.due_date);
     let p = priority.unwrap_or(existing.priority);
-    let dd = due_date.or(existing.due_date);
     let now = chrono::Utc::now().timestamp();
+
+    // If completing a recurring todo, advance it instead
+    if c {
+        if let Ok(()) = advance_recurring_todo(&conn, &id) {
+            // Recurrence handled — reset to uncompleted with advanced date
+            c = false;
+            // Re-read the advanced due_date from DB
+            if let Ok(advanced_due) = conn.query_row(
+                "SELECT due_date FROM todos WHERE id = ?1",
+                [&id],
+                |r| r.get::<_, Option<i64>>(0),
+            ) {
+                dd = advanced_due;
+            }
+        }
+    }
+
     conn.execute("UPDATE todos SET title=?1, description=?2, is_completed=?3, priority=?4, due_date=?5, updated_at=?6 WHERE id=?7", (&stored_t, &stored_d, c as i64, &p, &dd, now, &id)).map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({"id": &id, "title": &resp_t, "description": &resp_d, "is_completed": c, "priority": &p, "due_date": &dd, "updated_at": now});
+    enqueue_sync(&conn, "todo", &id, "update", Some(&payload.to_string())).ok();
     drop(conn);
     Ok(Todo { id, user_id: existing.user_id, title: resp_t, description: resp_d, is_completed: c, priority: p, due_date: dd, created_at: existing.created_at, updated_at: now })
 }
@@ -67,6 +90,7 @@ pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 pub async fn delete_todo(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM todos WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;
+    enqueue_sync(&conn, "todo", &id, "delete", None).ok();
     drop(conn);
     Ok(())
 }

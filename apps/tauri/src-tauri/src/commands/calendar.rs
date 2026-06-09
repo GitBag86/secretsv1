@@ -1,6 +1,7 @@
 use tauri::State;
 use crate::database::pool::DbPool;
 use crate::crypto::manager::EncryptionManager;
+use crate::sync::enqueue_sync;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -38,6 +39,8 @@ pub async fn create_calendar_event(pool: State<'_, DbPool>, enc: State<'_, Encry
     let now = chrono::Utc::now().timestamp();
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("INSERT INTO calendar_events (id, user_id, title, description, start_time, end_time, all_day, color, rrule, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)", (&id, &user_id, &et, &ed, start_time, end_time, ad as i64, &c, &rrule, now, now)).map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({"id": &id, "title": &title, "description": &description, "start_time": start_time, "end_time": end_time, "all_day": ad, "color": &c, "rrule": &rrule, "created_at": now, "updated_at": now});
+    enqueue_sync(&conn, "event", &id, "create", Some(&payload.to_string())).ok();
     drop(conn);
     Ok(CalendarEvent { id, user_id, title, description, start_time, end_time, all_day: ad, color: c, rrule, parent_event_id: None, created_at: now, updated_at: now })
 }
@@ -62,6 +65,8 @@ pub async fn update_calendar_event(pool: State<'_, DbPool>, enc: State<'_, Encry
     let rr = rrule.or(existing.rrule);
     let now = chrono::Utc::now().timestamp();
     conn.execute("UPDATE calendar_events SET title=?1, description=?2, start_time=?3, end_time=?4, all_day=?5, color=?6, rrule=?7, updated_at=?8 WHERE id=?9", (&stored_t, &stored_d, st, et, ad as i64, &c, &rr, now, &id)).map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({"id": &id, "title": &resp_t, "description": &resp_d, "start_time": st, "end_time": et, "all_day": ad, "color": &c, "rrule": &rr, "updated_at": now});
+    enqueue_sync(&conn, "event", &id, "update", Some(&payload.to_string())).ok();
     drop(conn);
     Ok(CalendarEvent { id, user_id: existing.user_id, title: resp_t, description: resp_d, start_time: st, end_time: et, all_day: ad, color: c, rrule: rr, parent_event_id: existing.parent_event_id, created_at: existing.created_at, updated_at: now })
 }
@@ -70,6 +75,7 @@ pub async fn update_calendar_event(pool: State<'_, DbPool>, enc: State<'_, Encry
 pub async fn delete_calendar_event(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM calendar_events WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;
+    enqueue_sync(&conn, "event", &id, "delete", None).ok();
     drop(conn);
     Ok(())
 }

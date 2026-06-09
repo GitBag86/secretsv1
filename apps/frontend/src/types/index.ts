@@ -56,3 +56,31 @@ export interface Notebook {
   created_at: number;
   updated_at: number;
 }
+
+export interface Tag {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  created_at: number;
+}
+
+export interface RecurringTodo {
+  id: string;
+  todo_id: string;
+  recurrence_rule: string;
+  next_due_date: number;
+  created_at: number;
+}
+
+export interface Attachment {
+  id: string;
+  user_id: string;
+  note_id: string;
+  filename: string;
+  mime_type: string;
+  size: number;
+  storage_path: string;
+  encrypted: boolean;
+  created_at: number;
+}

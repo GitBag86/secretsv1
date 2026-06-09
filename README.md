@@ -181,14 +181,18 @@ docker compose up --build
 
 ## Configuration
 
-### Environment Variables
+### Supabase Sync (Optional)
 
-For Supabase sync (optional), create `apps/tauri/src-tauri/.env`:
+KnowledgeBase can sync across devices using Supabase as the cloud backend. Data is end-to-end encrypted before leaving your device.
 
-```env
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-```
+📖 **[Full setup guide →](apps/tauri/src-tauri/SYNC_SETUP.md)**
+
+Covers:
+- Creating a Supabase project
+- Creating the required database tables
+- Configuring Row-Level Security policies
+- In-app sync configuration (Settings > Sync)
+- Conflict resolution with vector clocks
 
 ### Tauri
 

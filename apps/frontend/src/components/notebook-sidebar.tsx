@@ -21,16 +21,21 @@ export function NotebookSidebar({ activeNotebook, onSelect }: { activeNotebook: 
   const handleDragStart = (idx: number) => { dragIdx.current = idx; };
   const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
-    if (dragIdx.current === null || dragIdx.current === idx) return;
+  };
+  const handleDrop = (idx: number) => {
+    if (dragIdx.current === null || dragIdx.current === idx) {
+      dragIdx.current = null;
+      return;
+    }
     const items = [...notebooks];
     const [moved] = items.splice(dragIdx.current, 1);
     items.splice(idx, 0, moved);
-    dragIdx.current = idx;
+    dragIdx.current = null;
+    // Save the new order: fire all mutations at once
     items.forEach((nb, i) => {
       if (nb.sort_order !== i) update.mutate({ id: nb.id, sort_order: i });
     });
   };
-  const handleDrop = () => { dragIdx.current = null; };
 
   return (
     <aside className="w-56 border-r bg-card shrink-0 flex flex-col">
@@ -68,7 +73,7 @@ export function NotebookSidebar({ activeNotebook, onSelect }: { activeNotebook: 
             draggable
             onDragStart={() => handleDragStart(idx)}
             onDragOver={(e) => handleDragOver(e, idx)}
-            onDrop={handleDrop}
+            onDrop={() => handleDrop(idx)}
             className="flex items-center gap-1 group"
           >
             <button onClick={() => onSelect(nb.id)} className={`flex-1 text-left px-3 py-1.5 rounded-md text-sm truncate ${activeNotebook === nb.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent"}`}>

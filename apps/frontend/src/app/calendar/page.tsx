@@ -191,7 +191,7 @@ export default function CalendarPage() {
 
 function parseRrule(rrule: string): any {
   if (rrule.startsWith("FREQ=DAILY")) return "daily";
-  if (rrule.startsWith("FREQ=WEEKLY;INTERVAL=2")) return "weekly";
+  if (rrule.startsWith("FREQ=WEEKLY;INTERVAL=2")) return "biweekly";
   if (rrule.startsWith("FREQ=WEEKLY")) return "weekly";
   if (rrule.startsWith("FREQ=MONTHLY")) return "monthly";
   if (rrule.startsWith("FREQ=YEARLY")) return "yearly";

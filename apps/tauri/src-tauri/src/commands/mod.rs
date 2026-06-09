@@ -5,3 +5,6 @@ pub mod calendar;
 pub mod encryption;
 pub mod notebooks;
 pub mod sync;
+pub mod tags;
+pub mod attachments;
+pub mod recurring_todos;

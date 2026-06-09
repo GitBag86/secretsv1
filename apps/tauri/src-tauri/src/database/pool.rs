@@ -28,6 +28,8 @@ pub async fn init_pool(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>
         include_str!("../../migrations/013_create_device_info.sql"),
         include_str!("../../migrations/014_create_recurring_todos.sql"),
         include_str!("../../migrations/015_add_recurring_events.sql"),
+        include_str!("../../migrations/016_add_recurring_todos_index.sql"),
+        include_str!("../../migrations/017_create_todo_tags.sql"),
     ];
     for sql in migrations {
         if let Err(e) = conn.execute_batch(sql) {
