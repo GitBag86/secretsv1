@@ -2,7 +2,7 @@
 import { useTodos, useTags } from "@/hooks";
 import { NavHeader } from "@/components/nav-header";
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { RecurringTodo, Tag } from "@/types";
 
@@ -292,6 +292,7 @@ export default function TodosPage() {
                 <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${todo.priority === "high" ? "bg-red-100 text-red-800" : todo.priority === "medium" ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
                   {todo.priority}
                 </span>
+                <button onClick={async () => { await api.trash.archiveTodo(todo.id); queryClient.invalidateQueries({ queryKey: ["todos"] }); queryClient.invalidateQueries({ queryKey: ["all-todo-tags"] }); }} className="text-xs text-muted-foreground hover:text-foreground shrink-0" title="Archive">🗑️</button>
                 <button onClick={() => remove.mutate(todo.id)} className="text-destructive text-xs sm:text-sm hover:underline shrink-0">Delete</button>
                 </div>
                 {editingTagTodo === todo.id && (

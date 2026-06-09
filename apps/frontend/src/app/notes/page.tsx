@@ -2,6 +2,7 @@
 import { useNotes, useNotebooks, useTags, useNoteTags } from "@/hooks";
 import { NotebookSidebar } from "@/components/notebook-sidebar";
 import { NavHeader } from "@/components/nav-header";
+import { TemplatePicker from "@/components/template-picker";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -197,9 +198,12 @@ export default function NotesPage() {
               <h1 className="text-3xl font-bold">{notebookName || "All Notes"}</h1>
               <p className="text-sm text-muted-foreground mt-1">{filtered.length} note{filtered.length !== 1 ? "s" : ""}</p>
             </div>
-            <button onClick={() => setShowForm(true)} className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90">
-              New Note
-            </button>
+            <div className="flex gap-2">
+              <TemplatePicker onNoteCreated={(note) => setEditingNote(note)} />
+              <button onClick={() => setShowForm(true)} className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90">
+                New Note
+              </button>
+            </div>
           </div>
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search notes..." className="w-full mb-6 p-2 border rounded-md bg-background" />
           {showForm && (
@@ -246,6 +250,7 @@ export default function NotesPage() {
                     </span>
                     <div className="flex gap-2">
                       <button onClick={(e) => { e.stopPropagation(); exportNote(note); }} className="text-xs text-muted-foreground hover:text-foreground" title="Export Markdown">↓</button>
+                      <button onClick={async (e) => { e.stopPropagation(); await api.trash.archiveNote(note.id); queryClient.invalidateQueries({ queryKey: ["notes"] }); }} className="text-xs text-muted-foreground hover:text-foreground" title="Archive">🗑️</button>
                       <button onClick={(e) => { e.stopPropagation(); remove.mutate(note.id); }} className="text-destructive text-sm hover:underline">Delete</button>
                     </div>
                   </div>

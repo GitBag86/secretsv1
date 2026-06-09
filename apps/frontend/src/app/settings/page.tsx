@@ -35,6 +35,12 @@ export default function SettingsPage() {
   const [newTagColor, setNewTagColor] = useState("#6b7280");
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [tmplName, setTmplName] = useState("");
+
+  const { data: allTemplates = [] } = useQuery({
+    queryKey: ["templates"],
+    queryFn: () => api.templates.list(),
+  });
 
   const tagUpdate = useMutation({
     mutationFn: ({ id, name, color }: { id: string; name: string; color: string }) =>
@@ -485,6 +491,57 @@ export default function SettingsPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-lg border bg-card p-6 space-y-4">
+          <h2 className="text-lg font-semibold">Templates</h2>
+          <p className="text-sm text-muted-foreground">Create reusable note templates with predefined content.</p>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <input
+              value={tmplName}
+              onChange={(e) => setTmplName(e.target.value)}
+              placeholder="Template name..."
+              className="flex-1 p-2 text-sm border rounded-md bg-background"
+            />
+            <button
+              onClick={async () => {
+                if (!tmplName.trim()) return;
+                await api.templates.create({ name: tmplName.trim(), content: "<h1></h1><p></p>" });
+                setTmplName("");
+                queryClient.invalidateQueries({ queryKey: ["templates"] });
+              }}
+              disabled={!tmplName.trim()}
+              className="bg-primary text-primary-foreground px-3 py-2 rounded-md text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
+            >
+              Add Template
+            </button>
+          </div>
+
+          {allTemplates.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No templates yet. Create one above!</p>
+          ) : (
+            <div className="space-y-1.5">
+              {allTemplates.map((tmpl) => (
+                <div key={tmpl.id} className="flex items-center gap-2 rounded-md border p-2.5">
+                  <span className="flex-1 text-sm font-medium truncate">{tmpl.name}</span>
+                  <span className="text-xs text-muted-foreground">{tmpl.content.length} chars</span>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete template "${tmpl.name}"?`)) {
+                        api.templates.delete(tmpl.id).then(() => {
+                          queryClient.invalidateQueries({ queryKey: ["templates"] });
+                        });
+                      }
+                    }}
+                    className="text-xs px-2 py-1 rounded border text-destructive hover:bg-destructive/10"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </section>

@@ -9,3 +9,5 @@ pub mod tags;
 pub mod attachments;
 pub mod recurring_todos;
 pub mod data;
+pub mod templates;
+pub mod archive;

@@ -213,6 +213,64 @@ export default function Home() {
             </Link>
           </div>
 
+          {/* Analytics / Charts */}
+          <div className="rounded-xl border bg-card p-6 shadow-sm">
+            <h3 className="font-semibold text-lg mb-3">Analytics</h3>
+            <div className="space-y-4">
+              {/* Priority Distribution */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">Todo Priority</p>
+                <div className="space-y-1.5">
+                  {[
+                    { label: "High", count: stats.highPriority, color: "bg-red-500" },
+                    { label: "Medium", count: stats.activeTodos - stats.highPriority, color: "bg-yellow-500" },
+                    { label: "Low", count: todos.filter((t) => !t.is_completed && t.priority === "low").length, color: "bg-green-500" },
+                    { label: "Completed", count: stats.completedTodos, color: "bg-blue-500" },
+                  ].map(({ label, count, color }) => {
+                    const max = stats.totalTodos || 1;
+                    const pct = Math.round((count / max) * 100);
+                    return (
+                      <div key={label} className="flex items-center gap-2">
+                        <span className="text-xs w-20 shrink-0 text-muted-foreground">{label}</span>
+                        <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
+                          <div className={`h-full ${color} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs w-6 text-right text-muted-foreground">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* Notes vs Todos */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">Content Overview</p>
+                <div className="flex items-end gap-3 h-28">
+                  {[
+                    { label: "Notes", count: stats.totalNotes, color: "bg-blue-500" },
+                    { label: "Todos", count: stats.totalTodos, color: "bg-green-500" },
+                    { label: "Events", count: stats.totalEvents, color: "bg-purple-500" },
+                    { label: "Notebooks", count: stats.notebookCount, color: "bg-orange-500" },
+                  ].map(({ label, count, color }) => {
+                    const max = Math.max(stats.totalNotes, stats.totalTodos, stats.totalEvents, stats.notebookCount, 1);
+                    const height = Math.round((count / max) * 100);
+                    return (
+                      <div key={label} className="flex-1 flex flex-col items-center gap-1">
+                        <div className="relative w-full flex items-end justify-center" style={{ height: '112px' }}>
+                          <div
+                            className={`w-full max-w-[40px] ${color} rounded-t-md transition-all duration-500`}
+                            style={{ height: `${height}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">{label}</span>
+                        <span className="text-xs font-medium">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Popular Tags */}
           <div className="rounded-xl border bg-card p-6 shadow-sm">
             <h3 className="font-semibold text-lg mb-1">Popular Tags</h3>

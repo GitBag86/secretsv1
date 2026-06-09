@@ -12,7 +12,7 @@ pub struct Todo { pub id: String, pub user_id: String, pub title: String, pub de
 pub async fn list_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<Vec<Todo>, String> {
     let mut todos = {
         let conn = pool.get().await.map_err(|e| e.to_string())?;
-        let mut stmt = conn.prepare("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos ORDER BY is_completed ASC").map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos WHERE is_archived = 0 ORDER BY is_completed ASC").map_err(|e| e.to_string())?;
         let mut result = Vec::new();
         let rows = stmt.query_map([], |r| {
             Ok(Todo { id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?, description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0, priority: r.get(5)?, due_date: r.get(6)?, created_at: r.get(7)?, updated_at: r.get(8)? })
@@ -38,7 +38,7 @@ pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     let ed = if let Some(ref d) = description { Some(enc.encrypt_or_pass(d).await) } else { None };
     let now = chrono::Utc::now().timestamp();
     let conn = pool.get().await.map_err(|e| e.to_string())?;
-    conn.execute("INSERT INTO todos (id, user_id, title, description, priority, due_date, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)", (&id, &user_id, &et, &ed, &p, &due_date, now, now)).map_err(|e| e.to_string())?;
+    conn.execute("INSERT INTO todos (id, user_id, title, description, priority, due_date, is_archived, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,0,?7,?8)", (&id, &user_id, &et, &ed, &p, &due_date, now, now)).map_err(|e| e.to_string())?;
     let payload = serde_json::json!({"id": &id, "title": &title, "description": &description, "priority": &p, "due_date": &due_date, "is_completed": false, "created_at": now, "updated_at": now});
     enqueue_sync(&conn, "todo", &id, "create", Some(&payload.to_string())).ok();
     drop(conn);

@@ -16,6 +16,13 @@ function renderWithQ(cmp: React.ReactElement) {
 // Mock Tauri API
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
+// Mock next/navigation for SearchPalette (rendered inside NavHeader)
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 // We test the page components in isolation by mocking the hooks
 vi.mock("@/hooks", () => ({
   useAuth: () => ({

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { User, Note, Todo, CalendarEvent, Notebook, Tag, Attachment, RecurringTodo } from "@/types";
+import type { User, Note, Todo, CalendarEvent, Notebook, Tag, Attachment, RecurringTodo, Template, UnifiedSearchItem } from "@/types";
 
 export const api = {
   auth: {
@@ -92,6 +92,27 @@ export const api = {
       invoke<RecurringTodo>("set_recurrence", { todoId, recurrenceRule }),
     remove: (todoId: string) => invoke<void>("remove_recurrence", { todoId }),
     list: () => invoke<RecurringTodo[]>("list_recurring_todos"),
+  },
+  templates: {
+    list: () => invoke<Template[]>("list_templates"),
+    create: (data: { name: string; content: string }) =>
+      invoke<Template>("create_template", data),
+    delete: (id: string) => invoke<void>("delete_template", { id }),
+    createNoteFrom: (templateId: string, title?: string, notebookId?: string) =>
+      invoke<Note>("create_note_from_template", { templateId, title, notebookId }),
+  },
+  trash: {
+    listNotes: () => invoke<Note[]>("list_archived_notes"),
+    listTodos: () => invoke<Todo[]>("list_archived_todos"),
+    restoreNote: (id: string) => invoke<void>("restore_note", { id }),
+    restoreTodo: (id: string) => invoke<void>("restore_todo", { id }),
+    permanentlyDeleteNote: (id: string) => invoke<void>("permanently_delete_note", { id }),
+    permanentlyDeleteTodo: (id: string) => invoke<void>("permanently_delete_todo", { id }),
+    archiveNote: (id: string) => invoke<void>("archive_note", { id }),
+    archiveTodo: (id: string) => invoke<void>("archive_todo", { id }),
+  },
+  search: {
+    unified: (query: string) => invoke<UnifiedSearchItem[]>("unified_search", { query }),
   },
   data: {
     exportData: () => invoke<string>("export_data"),

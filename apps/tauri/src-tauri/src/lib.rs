@@ -82,6 +82,19 @@ pub fn run() {
             commands::recurring_todos::list_recurring_todos,
             commands::data::export_data,
             commands::data::import_data,
+            commands::templates::list_templates,
+            commands::templates::create_template,
+            commands::templates::delete_template,
+            commands::templates::create_note_from_template,
+            commands::archive::archive_note,
+            commands::archive::restore_note,
+            commands::archive::list_archived_notes,
+            commands::archive::permanently_delete_note,
+            commands::archive::archive_todo,
+            commands::archive::restore_todo,
+            commands::archive::list_archived_todos,
+            commands::archive::permanently_delete_todo,
+            commands::archive::unified_search,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
