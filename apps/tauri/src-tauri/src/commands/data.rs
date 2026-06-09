@@ -266,8 +266,8 @@ pub async fn import_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 
     // --- Import notes (encrypt content) ---
     for n in &export.notes {
-        let et = enc.encrypt_or_pass(&n.title).await;
-        let ec = enc.encrypt_or_pass(&n.content).await;
+        let et = enc.encrypt_or_pass(&n.title).await.map_err(|e| e.to_string())?;
+        let ec = enc.encrypt_or_pass(&n.content).await.map_err(|e| e.to_string())?;
         if let Err(e) = conn.execute(
             "INSERT OR IGNORE INTO notes (id, user_id, notebook_id, title, content, word_count, reading_time, is_pinned, is_archived, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
             (&n.id, &n.user_id, &n.notebook_id, &et, &ec, n.word_count, n.reading_time, n.is_pinned as i64, n.is_archived as i64, n.created_at, n.updated_at),
@@ -280,8 +280,8 @@ pub async fn import_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 
     // --- Import todos (encrypt content) ---
     for t in &export.todos {
-        let et = enc.encrypt_or_pass(&t.title).await;
-        let ed = if let Some(ref d) = t.description { Some(enc.encrypt_or_pass(d).await) } else { None };
+        let et = enc.encrypt_or_pass(&t.title).await.map_err(|e| e.to_string())?;
+        let ed = if let Some(ref d) = t.description { Some(enc.encrypt_or_pass(d).await.map_err(|e| e.to_string())?) } else { None };
         if let Err(e) = conn.execute(
             "INSERT OR IGNORE INTO todos (id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
             (&t.id, &t.user_id, &et, &ed, t.is_completed as i64, &t.priority, &t.due_date, t.created_at, t.updated_at),
@@ -294,8 +294,8 @@ pub async fn import_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 
     // --- Import calendar events (encrypt content) ---
     for e in &export.calendar_events {
-        let et = enc.encrypt_or_pass(&e.title).await;
-        let ed = if let Some(ref d) = e.description { Some(enc.encrypt_or_pass(d).await) } else { None };
+        let et = enc.encrypt_or_pass(&e.title).await.map_err(|e| e.to_string())?;
+        let ed = if let Some(ref d) = e.description { Some(enc.encrypt_or_pass(d).await.map_err(|e| e.to_string())?) } else { None };
         if let Err(ee) = conn.execute(
             "INSERT OR IGNORE INTO calendar_events (id, user_id, title, description, start_time, end_time, all_day, color, rrule, parent_event_id, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
             (&e.id, &e.user_id, &et, &ed, e.start_time, e.end_time, e.all_day as i64, &e.color, &e.rrule, &e.parent_event_id, e.created_at, e.updated_at),

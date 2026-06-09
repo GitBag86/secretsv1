@@ -9,8 +9,28 @@ pub struct AuthResponse { pub user: UserResponse, pub token: String }
 #[derive(Serialize)]
 pub struct UserResponse { pub id: String, pub email: String, pub name: Option<String>, pub created_at: i64, pub updated_at: i64 }
 
+fn validate_email(email: &str) -> Result<(), String> {
+    if email.len() > 254 { return Err("Email too long (max 254 chars)".into()); }
+    if !email.contains('@') || !email.contains('.') { return Err("Invalid email format".into()); }
+    if email.chars().any(|c| c.is_control()) { return Err("Email contains invalid characters".into()); }
+    Ok(())
+}
+
+fn validate_password(password: &str) -> Result<(), String> {
+    if password.len() < 8 { return Err("Password must be at least 8 characters".into()); }
+    if password.len() > 128 { return Err("Password too long (max 128 chars)".into()); }
+    if password.chars().any(|c| c.is_control()) { return Err("Password contains invalid characters".into()); }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn register(pool: State<'_, DbPool>, email: String, password: String, name: Option<String>) -> Result<AuthResponse, String> {
+    validate_email(&email)?;
+    validate_password(&password)?;
+    if let Some(ref n) = name {
+        if n.len() > 100 { return Err("Name too long (max 100 chars)".into()); }
+        if n.chars().any(|c| c.is_control()) { return Err("Name contains invalid characters".into()); }
+    }
     let id = uuid::Uuid::new_v4().to_string();
     let password_hash = crypto::argon2::hash_password(&password).map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().timestamp();
@@ -21,6 +41,9 @@ pub async fn register(pool: State<'_, DbPool>, email: String, password: String, 
 
 #[tauri::command]
 pub async fn login(pool: State<'_, DbPool>, email: String, password: String) -> Result<AuthResponse, String> {
+    validate_email(&email)?;
+    if password.is_empty() { return Err("Password is required".into()); }
+    if password.len() > 128 { return Err("Password too long".into()); }
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     let row: (String, String, Option<String>, String, i64, i64) = conn.query_row("SELECT id, email, name, password_hash, created_at, updated_at FROM users WHERE email = ?1", [&email], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))).map_err(|e| e.to_string())?;
     crypto::argon2::verify_password(&password, &row.3).map_err(|_| "Invalid password".to_string())?;
@@ -31,8 +54,7 @@ pub async fn login(pool: State<'_, DbPool>, email: String, password: String) -> 
 pub async fn unlock_database(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, password: String) -> Result<serde_json::Value, String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     let salt_hex: String = conn.query_row("SELECT value FROM app_settings WHERE key = 'encryption_salt'", [], |r| r.get(0)).map_err(|_| "No master password set".to_string())?;
-    let salt = hex::decode(&salt_hex).map_err(|e| e.to_string())?;
-    enc.set_key(&password, &salt).await;
+    enc.set_key_from_stored_salt(&password, &salt_hex).await.map_err(|e| format!("Key derivation failed: {}", e))?;
     let now = chrono::Utc::now().timestamp();
     conn.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('session_unlocked_at', ?1, ?2)", (now.to_string(), now)).map_err(|e| e.to_string())?;
     Ok(serde_json::json!({ "success": true }))

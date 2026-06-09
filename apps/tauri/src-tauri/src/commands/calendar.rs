@@ -2,10 +2,25 @@ use tauri::State;
 use crate::database::pool::DbPool;
 use crate::crypto::manager::EncryptionManager;
 use crate::sync::enqueue_sync;
+use crate::commands::helpers;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CalendarEvent { pub id: String, pub user_id: String, pub title: String, pub description: Option<String>, pub start_time: i64, pub end_time: i64, pub all_day: bool, pub color: String, pub rrule: Option<String>, pub parent_event_id: Option<String>, pub created_at: i64, pub updated_at: i64 }
+
+fn validate_event_title(title: &str) -> Result<(), String> {
+    if title.is_empty() { return Err("Title cannot be empty".into()); }
+    if title.len() > 10000 { return Err("Title too long (max 10000 chars)".into()); }
+    if title.chars().any(|c| c.is_control() && c != '\n' && c != '\t') {
+        return Err("Title contains invalid control characters".into());
+    }
+    Ok(())
+}
+
+fn validate_event_description(desc: &str) -> Result<(), String> {
+    if desc.len() > 100_000 { return Err("Description too long (max 100KB)".into()); }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn list_calendar_events(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<Vec<CalendarEvent>, String> {
@@ -19,23 +34,21 @@ pub async fn list_calendar_events(pool: State<'_, DbPool>, enc: State<'_, Encryp
         for row in rows { if let Ok(e) = row { result.push(e); } }
         result
     };
-    for e in &mut events {
-        e.title = enc.try_decrypt(&e.title).await;
-        if let Some(ref d) = e.description.clone() {
-            e.description = Some(enc.try_decrypt(d).await);
-        }
-    }
+    helpers::decrypt_events(&enc, &mut events).await;
     Ok(events)
 }
 
 #[tauri::command]
 pub async fn create_calendar_event(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, start_time: i64, end_time: i64, description: Option<String>, all_day: Option<bool>, color: Option<String>, rrule: Option<String>) -> Result<CalendarEvent, String> {
+    validate_event_title(&title)?;
+    if let Some(ref d) = description { validate_event_description(d)?; }
+    if start_time >= end_time { return Err("start_time must be before end_time".into()); }
     let id = uuid::Uuid::new_v4().to_string();
     let user_id = "local-user".to_string();
     let ad = all_day.unwrap_or(false);
     let c = color.unwrap_or_else(|| "#3b82f6".into());
-    let et = enc.encrypt_or_pass(&title).await;
-    let ed = if let Some(ref d) = description { Some(enc.encrypt_or_pass(d).await) } else { None };
+    let et = enc.encrypt_or_pass(&title).await.map_err(|e| e.to_string())?;
+    let ed = if let Some(ref d) = description { Some(enc.encrypt_or_pass(d).await.map_err(|e| e.to_string())?) } else { None };
     let now = chrono::Utc::now().timestamp();
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("INSERT INTO calendar_events (id, user_id, title, description, start_time, end_time, all_day, color, rrule, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)", (&id, &user_id, &et, &ed, start_time, end_time, ad as i64, &c, &rrule, now, now)).map_err(|e| e.to_string())?;
@@ -47,6 +60,8 @@ pub async fn create_calendar_event(pool: State<'_, DbPool>, enc: State<'_, Encry
 
 #[tauri::command]
 pub async fn update_calendar_event(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String, title: Option<String>, description: Option<String>, start_time: Option<i64>, end_time: Option<i64>, all_day: Option<bool>, color: Option<String>, rrule: Option<String>) -> Result<CalendarEvent, String> {
+    if let Some(ref t) = title { validate_event_title(t)?; }
+    if let Some(ref d) = description { validate_event_description(d)?; }
     let (existing, conn) = {
         let conn = pool.get().await.map_err(|e| e.to_string())?;
         let existing = conn.query_row("SELECT id, user_id, title, description, start_time, end_time, all_day, color, rrule, parent_event_id, created_at, updated_at FROM calendar_events WHERE id = ?1", [&id], |r| {
@@ -54,8 +69,8 @@ pub async fn update_calendar_event(pool: State<'_, DbPool>, enc: State<'_, Encry
         }).map_err(|e| e.to_string())?;
         (existing, conn)
     };
-    let stored_t = if let Some(ref nt) = title { enc.encrypt_or_pass(nt).await } else { existing.title.clone() };
-    let stored_d = if let Some(ref nd) = description { Some(enc.encrypt_or_pass(nd).await) } else { existing.description.clone() };
+    let stored_t = if let Some(ref nt) = title { enc.encrypt_or_pass(nt).await.map_err(|e| e.to_string())? } else { existing.title.clone() };
+    let stored_d = if let Some(ref nd) = description { Some(enc.encrypt_or_pass(nd).await.map_err(|e| e.to_string())?) } else { existing.description.clone() };
     let resp_t = enc.try_decrypt(&stored_t).await;
     let resp_d = if let Some(ref d) = stored_d { Some(enc.try_decrypt(d).await) } else { None };
     let st = start_time.unwrap_or(existing.start_time);

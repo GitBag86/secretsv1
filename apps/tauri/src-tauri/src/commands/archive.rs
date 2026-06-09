@@ -1,6 +1,7 @@
 use tauri::State;
 use crate::database::pool::DbPool;
 use crate::crypto::manager::EncryptionManager;
+use super::helpers;
 use serde::{Deserialize, Serialize};
 
 // --- Archive / Restore ---
@@ -40,10 +41,7 @@ pub async fn list_archived_notes(pool: State<'_, DbPool>, enc: State<'_, Encrypt
     }).map_err(|e| e.to_string())?;
     for row in rows { if let Ok(n) = row { notes.push(n); } }
     drop(conn);
-    for n in &mut notes {
-        n.title = enc.try_decrypt(&n.title).await;
-        n.content = enc.try_decrypt(&n.content).await;
-    }
+    crate::commands::notes::decrypt_notes(&enc, &mut notes).await;
     Ok(notes)
 }
 
@@ -91,10 +89,7 @@ pub async fn list_archived_todos(pool: State<'_, DbPool>, enc: State<'_, Encrypt
     for row in rows { if let Ok(t) = row { todos.push(t); } }
     drop(conn);
     for t in &mut todos {
-        t.title = enc.try_decrypt(&t.title).await;
-        if let Some(ref d) = t.description.clone() {
-            t.description = Some(enc.try_decrypt(d).await);
-        }
+        helpers::decrypt_todo(&enc, t).await;
     }
     Ok(todos)
 }
@@ -115,7 +110,7 @@ pub struct UnifiedSearchItem {
     pub id: String,
     pub title: String,
     pub snippet: String,
-    pub entity_type: String, // "note", "todo", "event"
+    pub entity_type: String,
     pub url: String,
     pub subtitle: String,
 }
@@ -143,14 +138,9 @@ pub async fn unified_search(
             if let Ok((id, title, content)) = row {
                 let dec_title = enc.try_decrypt(&title).await;
                 let dec_content = enc.try_decrypt(&content).await;
-                let plain = dec_content.replace(|c: char| c == '<' || c == '>', "");
+                let plain = helpers::strip_html(&dec_content);
                 if dec_title.to_lowercase().contains(&q) || plain.to_lowercase().contains(&q) {
-                    let idx = plain.to_lowercase().find(&q).unwrap_or(0);
-                    let start = idx.saturating_sub(40);
-                    let end = (idx + q.len() + 60).min(plain.len());
-                    let snippet = if start > 0 { "..." } else { "" }.to_string()
-                        + &plain[start..end]
-                        + if end < plain.len() { "..." } else { "" };
+                    let (snippet, _) = helpers::make_snippet(&plain, &q, 40, 60);
                     results.push(UnifiedSearchItem {
                         id, title: dec_title, snippet,
                         entity_type: "note".into(),
@@ -173,7 +163,10 @@ pub async fn unified_search(
                 let dec_title = enc.try_decrypt(&title).await;
                 let dec_desc = if let Some(ref d) = description { enc.try_decrypt(d).await } else { String::new() };
                 if dec_title.to_lowercase().contains(&q) || dec_desc.to_lowercase().contains(&q) {
-                    let snippet = if dec_desc.len() > 80 { format!("{}...", &dec_desc[..80]) } else { dec_desc.clone() };
+                    let (snippet, _) = helpers::make_snippet(&dec_desc, &q, 0, 80);
+                    let snippet = if snippet.is_empty() && !dec_desc.is_empty() {
+                        if dec_desc.len() > 80 { format!("{}...", &dec_desc[..80]) } else { dec_desc.clone() }
+                    } else { snippet };
                     results.push(UnifiedSearchItem {
                         id, title: dec_title, snippet,
                         entity_type: "todo".into(),
@@ -196,7 +189,10 @@ pub async fn unified_search(
                 let dec_title = enc.try_decrypt(&title).await;
                 let dec_desc = if let Some(ref d) = description { enc.try_decrypt(d).await } else { String::new() };
                 if dec_title.to_lowercase().contains(&q) || dec_desc.to_lowercase().contains(&q) {
-                    let snippet = if dec_desc.len() > 80 { format!("{}...", &dec_desc[..80]) } else { dec_desc.clone() };
+                    let (snippet, _) = helpers::make_snippet(&dec_desc, &q, 0, 80);
+                    let snippet = if snippet.is_empty() && !dec_desc.is_empty() {
+                        if dec_desc.len() > 80 { format!("{}...", &dec_desc[..80]) } else { dec_desc.clone() }
+                    } else { snippet };
                     let date_str = chrono::DateTime::from_timestamp(start_time, 0)
                         .map(|dt| dt.format("%b %d").to_string())
                         .unwrap_or_default();

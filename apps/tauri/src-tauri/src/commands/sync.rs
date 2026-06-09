@@ -1,6 +1,7 @@
 use tauri::State;
 use crate::database::pool::DbPool;
 use crate::sync::supabase::SupabaseClient;
+use crate::crypto::manager::EncryptionManager;
 use serde_json::Value;
 use crate::sync::conflict::VectorClock;
 
@@ -13,22 +14,25 @@ fn entity_to_table(entity_type: &str) -> &str {
     }
 }
 
-fn get_client(conn: &rusqlite::Connection) -> Result<SupabaseClient, String> {
+/// Get the Supabase client, decrypting the API key from storage if needed.
+async fn get_client(conn: &rusqlite::Connection, enc: &EncryptionManager) -> Result<SupabaseClient, String> {
     let url: String = conn.query_row(
         "SELECT value FROM app_settings WHERE key = 'supabase_url'",
         [], |r| r.get(0)
     ).map_err(|_| "Supabase URL not configured. Go to Settings to configure sync.".to_string())?;
-    let key: String = conn.query_row(
+    let stored_key: String = conn.query_row(
         "SELECT value FROM app_settings WHERE key = 'supabase_key'",
         [], |r| r.get(0)
     ).map_err(|_| "Supabase key not configured. Go to Settings to configure sync.".to_string())?;
+    // Decrypt the API key if it's encrypted
+    let key = enc.try_decrypt(&stored_key).await;
     Ok(SupabaseClient::new(url, key))
 }
 
 #[tauri::command]
-pub async fn sync_push(pool: State<'_, DbPool>) -> Result<serde_json::Value, String> {
+pub async fn sync_push(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<serde_json::Value, String> {
     let mut conn = pool.get().await.map_err(|e| e.to_string())?;
-    let client = get_client(&conn)?;
+    let client = get_client(&conn, &enc).await?;
 
     // Read all unsynced items
     let items: Vec<(i64, String, String, String, Option<String>)> = {
@@ -94,9 +98,9 @@ pub async fn sync_push(pool: State<'_, DbPool>) -> Result<serde_json::Value, Str
 }
 
 #[tauri::command]
-pub async fn sync_pull(pool: State<'_, DbPool>) -> Result<serde_json::Value, String> {
+pub async fn sync_pull(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<serde_json::Value, String> {
     let mut conn = pool.get().await.map_err(|e| e.to_string())?;
-    let client = get_client(&conn)?;
+    let client = get_client(&conn, &enc).await?;
 
     let last_sync: Option<String> = conn.query_row(
         "SELECT value FROM app_settings WHERE key = 'last_sync_at'",
@@ -210,18 +214,20 @@ pub async fn sync_status(pool: State<'_, DbPool>) -> Result<serde_json::Value, S
 }
 
 #[tauri::command]
-pub async fn configure_sync(pool: State<'_, DbPool>, url: String, key: String) -> Result<serde_json::Value, String> {
+pub async fn configure_sync(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, url: String, key: String) -> Result<serde_json::Value, String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().timestamp();
     conn.execute(
         "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('supabase_url', ?1, ?2)",
         (&url, now)
     ).map_err(|e| e.to_string())?;
+    // Encrypt the API key at rest
+    let encrypted_key = enc.encrypt_or_pass(&key).await.map_err(|e| e.to_string())?;
     conn.execute(
         "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('supabase_key', ?1, ?2)",
-        (&key, now)
+        (&encrypted_key, now)
     ).map_err(|e| e.to_string())?;
-    // Test the connection
+    // Test the connection with the plaintext key
     let client = SupabaseClient::new(url, key);
     let ok = client.test_connection().await.unwrap_or(false);
     Ok(serde_json::json!({

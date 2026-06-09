@@ -3,6 +3,7 @@ use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use base64::Engine;
 use crate::database::pool::DbPool;
+use crate::crypto::manager::EncryptionManager;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -29,6 +30,7 @@ fn get_attachments_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, Str
 pub async fn attach_file(
     app: tauri::AppHandle,
     pool: State<'_, DbPool>,
+    enc: State<'_, EncryptionManager>,
     note_id: String,
     filename: String,
     mime_type: String,
@@ -43,7 +45,17 @@ pub async fn attach_file(
         .decode(&data_base64)
         .map_err(|e| format!("Failed to decode file data: {}", e))?;
 
-    let size = decoded.len() as i64;
+    let original_size = decoded.len() as i64;
+
+    // Encrypt file data at rest if the database is unlocked
+    let (stored_data, is_encrypted) = if !enc.is_locked().await {
+        match enc.encrypt_raw(&decoded).await {
+            Ok(enc_data) => (enc_data, true),
+            Err(_) => (decoded.clone(), false), // Fall back to unencrypted on error
+        }
+    } else {
+        (decoded.clone(), false)
+    };
 
     // Save file to attachments directory
     let att_dir = get_attachments_dir(&app)?;
@@ -53,7 +65,7 @@ pub async fn attach_file(
         .unwrap_or("bin");
     let storage_name = format!("{}.{}", id, ext);
     let file_path = att_dir.join(&storage_name);
-    std::fs::write(&file_path, &decoded).map_err(|e| format!("Failed to save file: {}", e))?;
+    std::fs::write(&file_path, &stored_data).map_err(|e| format!("Failed to save file: {}", e))?;
 
     let storage_path = file_path.to_string_lossy().to_string();
 
@@ -61,8 +73,8 @@ pub async fn attach_file(
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute(
         "INSERT INTO attachments (id, user_id, note_id, filename, mime_type, size, storage_path, encrypted, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8)",
-        (&id, &user_id, &note_id, &filename, &mime_type, size, &storage_path, now),
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        (&id, &user_id, &note_id, &filename, &mime_type, original_size, &storage_path, is_encrypted as i64, now),
     ).map_err(|e| e.to_string())?;
     drop(conn);
 
@@ -72,9 +84,9 @@ pub async fn attach_file(
         note_id,
         filename,
         mime_type,
-        size,
+        size: original_size,
         storage_path,
-        encrypted: false,
+        encrypted: is_encrypted,
         created_at: now,
     })
 }
@@ -140,19 +152,43 @@ pub async fn delete_attachment(
 pub async fn open_attachment(
     app: tauri::AppHandle,
     pool: State<'_, DbPool>,
+    enc: State<'_, EncryptionManager>,
     id: String,
 ) -> Result<(), String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
-    let storage_path: String = conn.query_row(
-        "SELECT storage_path FROM attachments WHERE id = ?1",
+    let (storage_path, is_encrypted): (String, bool) = conn.query_row(
+        "SELECT storage_path, encrypted FROM attachments WHERE id = ?1",
         [&id],
-        |r| r.get(0),
+        |r| Ok((r.get(0)?, r.get::<_, i64>(1)? != 0)),
     ).map_err(|_| "Attachment not found".to_string())?;
     drop(conn);
 
-    // Open the file with the OS default application
+    // Read file from disk
+    let raw_data = std::fs::read(&storage_path)
+        .map_err(|e| format!("Failed to read attachment file: {}", e))?;
+
+    // Decrypt if necessary
+    let data = if is_encrypted && !enc.is_locked().await {
+        enc.decrypt_raw(&raw_data).await
+            .map_err(|e| format!("Failed to decrypt attachment: {}", e))?
+    } else if is_encrypted && enc.is_locked().await {
+        return Err("Cannot open encrypted attachment: database is locked".to_string());
+    } else {
+        raw_data
+    };
+
+    // Write decrypted data to a temp file and open with OS default app
+    let temp_dir = std::env::temp_dir();
+    let filename = std::path::Path::new(&storage_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("attachment");
+    let temp_path = temp_dir.join(filename);
+    std::fs::write(&temp_path, &data)
+        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+
     app.shell()
-        .open_path(&storage_path, None)
+        .open_path(&temp_path.to_string_lossy(), None)
         .map_err(|e| format!("Failed to open file: {}", e))?;
 
     Ok(())
@@ -195,7 +231,7 @@ mod tests {
             mime_type: "image/jpeg".into(),
             size: 1024,
             storage_path: "/tmp/attachments/uuid.jpg".into(),
-            encrypted: false,
+            encrypted: true,
             created_at: 1700000000,
         }
     }
@@ -218,15 +254,15 @@ mod tests {
         assert_eq!(a.filename, "photo.jpg");
         assert_eq!(a.mime_type, "image/jpeg");
         assert_eq!(a.size, 1024);
-        assert!(!a.encrypted);
+        assert!(a.encrypted);
     }
 
     #[test]
     fn attachment_encrypted_flag() {
         let mut a = make_attachment();
-        a.encrypted = true;
+        a.encrypted = false;
         let json = serde_json::to_string(&a).unwrap();
-        assert!(json.contains("true"));
+        assert!(json.contains("false"));
     }
 
     #[test]

@@ -3,10 +3,25 @@ use crate::database::pool::DbPool;
 use crate::crypto::manager::EncryptionManager;
 use crate::sync::enqueue_sync;
 use crate::commands::recurring_todos::advance_recurring_todo;
+use crate::commands::helpers;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Todo { pub id: String, pub user_id: String, pub title: String, pub description: Option<String>, pub is_completed: bool, pub priority: String, pub due_date: Option<i64>, pub created_at: i64, pub updated_at: i64 }
+
+fn validate_todo_title(title: &str) -> Result<(), String> {
+    if title.is_empty() { return Err("Title cannot be empty".into()); }
+    if title.len() > 10000 { return Err("Title too long (max 10000 chars)".into()); }
+    if title.chars().any(|c| c.is_control() && c != '\n' && c != '\t') {
+        return Err("Title contains invalid control characters".into());
+    }
+    Ok(())
+}
+
+fn validate_todo_description(desc: &str) -> Result<(), String> {
+    if desc.len() > 100_000 { return Err("Description too long (max 100KB)".into()); }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn list_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<Vec<Todo>, String> {
@@ -20,22 +35,24 @@ pub async fn list_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManage
         for row in rows { if let Ok(t) = row { result.push(t); } }
         result
     };
-    for t in &mut todos {
-        t.title = enc.try_decrypt(&t.title).await;
-        if let Some(ref d) = t.description.clone() {
-            t.description = Some(enc.try_decrypt(d).await);
-        }
-    }
+    helpers::decrypt_todos(&enc, &mut todos).await;
     Ok(todos)
 }
 
 #[tauri::command]
 pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, description: Option<String>, priority: Option<String>, due_date: Option<i64>) -> Result<Todo, String> {
+    validate_todo_title(&title)?;
+    if let Some(ref d) = description { validate_todo_description(d)?; }
+    let valid_priorities = ["low", "medium", "high"];
+    let p = priority.unwrap_or_else(|| "medium".into());
+    if !valid_priorities.contains(&p.as_str()) {
+        return Err(format!("Invalid priority '{}'. Must be one of: {:?}", p, valid_priorities));
+    }
     let id = uuid::Uuid::new_v4().to_string();
     let user_id = "local-user".to_string();
     let p = priority.unwrap_or_else(|| "medium".into());
-    let et = enc.encrypt_or_pass(&title).await;
-    let ed = if let Some(ref d) = description { Some(enc.encrypt_or_pass(d).await) } else { None };
+    let et = enc.encrypt_or_pass(&title).await.map_err(|e| e.to_string())?;
+    let ed = if let Some(ref d) = description { Some(enc.encrypt_or_pass(d).await.map_err(|e| e.to_string())?) } else { None };
     let now = chrono::Utc::now().timestamp();
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("INSERT INTO todos (id, user_id, title, description, priority, due_date, is_archived, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,0,?7,?8)", (&id, &user_id, &et, &ed, &p, &due_date, now, now)).map_err(|e| e.to_string())?;
@@ -47,6 +64,14 @@ pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 
 #[tauri::command]
 pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String, title: Option<String>, description: Option<String>, is_completed: Option<bool>, priority: Option<String>, due_date: Option<i64>) -> Result<Todo, String> {
+    if let Some(ref t) = title { validate_todo_title(t)?; }
+    if let Some(ref d) = description { validate_todo_description(d)?; }
+    if let Some(ref p) = priority {
+        let valid_priorities = ["low", "medium", "high"];
+        if !valid_priorities.contains(&p.as_str()) {
+            return Err(format!("Invalid priority '{}'. Must be one of: {:?}", p, valid_priorities));
+        }
+    }
     let (existing, conn) = {
         let conn = pool.get().await.map_err(|e| e.to_string())?;
         let existing = conn.query_row("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos WHERE id = ?1", [&id], |r| {
@@ -54,8 +79,8 @@ pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
         }).map_err(|e| e.to_string())?;
         (existing, conn)
     };
-    let stored_t = if let Some(ref nt) = title { enc.encrypt_or_pass(nt).await } else { existing.title.clone() };
-    let stored_d = if let Some(ref nd) = description { Some(enc.encrypt_or_pass(nd).await) } else { existing.description.clone() };
+    let stored_t = if let Some(ref nt) = title { enc.encrypt_or_pass(nt).await.map_err(|e| e.to_string())? } else { existing.title.clone() };
+    let stored_d = if let Some(ref nd) = description { Some(enc.encrypt_or_pass(nd).await.map_err(|e| e.to_string())?) } else { existing.description.clone() };
     let resp_t = enc.try_decrypt(&stored_t).await;
     let resp_d = if let Some(ref d) = stored_d { Some(enc.try_decrypt(d).await) } else { None };
     let mut c = is_completed.unwrap_or(existing.is_completed);

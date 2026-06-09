@@ -1,80 +1,132 @@
 # KnowledgeBase — Agent Context
 
 ## Project
-Local-first, encrypted personal knowledge base desktop app with notes, todos, and calendar. Tauri v2 + Next.js SSG + SQLite + Tailwind CSS. Optional Supabase sync.
+Local-first, encrypted personal knowledge base desktop app with notes, todos, and calendar. Tauri v2 + Next.js 14 SSG + SQLite + Tailwind CSS. Optional Supabase sync.
 
 ## Architecture
-- **Monorepo** (pnpm + turborepo): `apps/frontend` (Next.js 14), `apps/tauri` (Tauri 2 + Rust)
-- **DB**: SQLite via rusqlite (bundled), WAL mode, 15 migrations
-- **Encryption**: AES-256-GCM client-side, Argon2id password hashing, SHA-256 key derivation. Content stored with `$enc$` prefix + hex(nonce||ciphertext). Backward-compatible with plaintext.
+- **Monorepo** (pnpm + turborepo): `apps/frontend` (Next.js 14 SSG), `apps/tauri/src-tauri` (Rust backend)
+- **DB**: SQLite via rusqlite (bundled), WAL mode, 19 migrations in `apps/tauri/src-tauri/migrations/`
+- **Encryption**: AES-256-GCM client-side, Argon2id password hashing, Argon2id key derivation (with legacy SHA-256 backward compat). Content stored with `$enc$` prefix + hex(nonce||ciphertext). Backward-compatible with plaintext.
 - **State**: React Query for server cache, Zustand for client state (auth, undo stack)
+- **IPC**: Frontend → Tauri `invoke()` → Rust commands. All DB access through `DbPool` (Arc<Mutex<Connection>>).
 
 ## Commands
 | Command | What |
 |---|---|
-| `npm run dev` | turbo dev |
-| `npm run build` | turbo build |
-| `npm run test` | vitest run |
-| `npm run test:watch` | vitest watch |
-| `npm run test:rust` | cargo test (in apps/tauri/src-tauri) |
-| `npm run format` | prettier |
-| `npm run tauri:dev` | tauri dev |
-| `npm run tauri:build` | tauri build |
+| `pnpm dev` | turbo dev (frontend only — browser) |
+| `pnpm build` | turbo build |
+| `pnpm test` | vitest run (frontend tests only) |
+| `pnpm test:watch` | vitest watch |
+| `pnpm test:rust` | cargo test (in apps/tauri/src-tauri) |
+| `pnpm lint` | turbo run lint |
+| `pnpm format` | prettier --write |
+| `pnpm tauri:dev` | tauri dev (full desktop app) |
+| `pnpm tauri:build` | tauri build (production installer) |
 
-## Test Status
-- **Frontend**: 58 tests (7 files) — vitest + jsdom + testing-library
-- **Rust**: 67 tests (crypto, models, sync)
-
-## Session Summary (2026-06-09)
-
-### Done this session
-1. **TipTap rich text editor** — Replaced textarea in notes page with full toolbar (B/I/S/code, H1-3, lists, blockquote, code block, task list). Edit modal with click-to-edit. HTML-stripped previews in cards. New: `components/rich-text-editor.tsx`. Added `@tailwindcss/typography` plugin.
-
-2. **Full-text search** — New `search_notes` Rust command that decrypts + filters server-side (FTS5 can't work with encrypted content). 300ms debounced search input calls API when >1 char. Registered in lib.rs. API: `api.notes.search(query)`.
-
-3. **Idle timer** — Already wired (no changes needed). Confirmed working.
-
-4. **Note drag-and-drop reordering** — HTML5 drag-and-drop on notebook sidebar. Uses existing `sort_order` + `update_notebook` with `sort_order` param.
-
-5. **Markdown export** — Turndown HTML→Markdown conversion. Export button on each note card (`↓`) and in edit modal ("Export Markdown"). Downloads as `.md` file via browser Blob API.
-
-6. **Encryption key rotation** — New `rotate_encryption_key` Rust command. Decrypts all notes/todos/events with old password, re-encrypts with new password. Updates salt + argon2 hash. Settings page UI with current/new password fields.
-
-7. **Undo/redo** — New `useUndoStack` zustand store. `useTodos` + `useNotes` hooks push undo entries on mutation success. `UndoRedo` component shows toast + buttons, handles Ctrl+Z / Ctrl+Shift+Z. Calls inverse Tauri command to revert.
-
-### New Files
-- `apps/frontend/src/components/rich-text-editor.tsx`
-- `apps/frontend/src/components/undo-redo.tsx`
-- `apps/frontend/src/hooks/useUndoStack.ts`
-
-### Modified Files
-- `apps/frontend/src/app/notes/page.tsx` — RTE, edit modal, export, API search
-- `apps/frontend/src/app/settings/page.tsx` — Key rotation UI
-- `apps/frontend/src/app/providers.tsx` — UndoRedo
-- `apps/frontend/src/components/notebook-sidebar.tsx` — Drag-and-drop
-- `apps/frontend/src/hooks/useTodos.ts` — Undo stack integration
-- `apps/frontend/src/hooks/useNotes.ts` — Undo stack integration
-- `apps/frontend/src/__tests__/components.test.tsx` — QueryClientProvider wrapper
-- `apps/frontend/src/__tests__/api.test.ts` — Search test
-- `apps/frontend/src/lib/api.ts` — search + rotate
-- `apps/frontend/tailwind.config.ts` — @tailwindcss/typography
-- `apps/frontend/src/app/globals.css` — TipTap styles
-- `apps/tauri/src-tauri/src/commands/notes.rs` — search_notes
-- `apps/tauri/src-tauri/src/commands/encryption.rs` — rotate_encryption_key
-- `apps/tauri/src-tauri/src/lib.rs` — register new commands
-- `apps/frontend/package.json` — turndown, @tailwindcss/typography
-
-### Remaining
-- Supabase sync (real HTTP push/pull/merge)
-- Tags (tables exist, no commands/UI)
-- Attachments (table exists)
-- Recurring todos (table exists)
-- Dashboard analytics/widgets
-- Keyboard shortcuts (only undo/redo wired)
-- Mobile responsive polish
-
-### Key Decisions
-- FTS5 unusable with encrypted content — server-side decrypt+filter instead
+## Key Architecture Decisions
+- FTS5 unusable with encrypted content — server-side decrypt+filter in `search_notes` and `unified_search`
 - Undo/redo uses zustand stack + inverse Tauri commands (not git-like snapshots)
 - Key rotation re-encrypts all rows in a single transaction
-- Notebook drag-and-drop uses HTML5 DnD API (no library needed for <50 items)
+- All DB commands use parameterized queries (no SQL injection risk)
+- `user_id` is hardcoded to `"local-user"` everywhere — multi-user not implemented
+- Template content is stored **unencrypted** (only note/todo/event content is encrypted)
+- Attachments stored on disk **encrypted** using AES-256-GCM via `encrypt_raw`/`decrypt_raw`
+
+## Security Issues (Fixed)
+1. **SHA-256 for key derivation** — FIXED: Now uses Argon2id (OWASP params: m=64MB, t=3, p=4) with backward-compatible SHA-256 fallback for legacy data. Salt versioned with "argon2id:" prefix.
+2. **`encrypt_or_pass` silent fallback** — FIXED: Now returns `Result<String, String>` and propagates errors. Callers use `.map_err(|e| e.to_string())?`.
+3. **Attachments unencrypted** — FIXED: Files encrypted at rest using AES-256-GCM via `encrypt_raw`/`decrypt_raw`. DB `encrypted` flag set correctly.
+4. **Supabase key in plaintext** — FIXED: API key encrypted at rest via `encrypt_or_pass` when stored, decrypted via `try_decrypt` when used.
+5. **Key rotation atomicity** — FIXED: Transaction ROLLBACK on any failure preserves old key + salt. No partial re-encryption.
+6. **Session timeout DB manipulation** — Still an issue (low priority — local-only attack vector).
+7. **No rate limiting on auth** — Still an issue (low priority — local desktop app).
+
+## Rust Backend Structure
+```
+apps/tauri/src-tauri/src/
+├── lib.rs              # Entry point, plugin setup, command registration
+├── main.rs             # Binary entry
+├── commands/           # 15 Tauri IPC handler modules
+│   ├── auth.rs         # register, login, unlock, lock, session management
+│   ├── notes.rs        # CRUD + search_notes (decrypt+filter)
+│   ├── todos.rs        # CRUD + bulk ops, recurring todo advancement
+│   ├── calendar.rs     # CRUD
+│   ├── encryption.rs   # set_master_password, rotate_encryption_key
+│   ├── notebooks.rs    # CRUD
+│   ├── tags.rs         # CRUD + junction table ops (note_tags, todo_tags)
+│   ├── attachments.rs  # File attach/delete/open (ENCRYPTED at rest)
+│   ├── sync.rs         # Supabase push/pull, configure
+│   ├── recurring_todos.rs # Set/remove/list recurrence rules
+│   ├── templates.rs    # CRUD + create note from template
+│   ├── archive.rs      # Soft-delete + trash + unified_search
+│   ├── data.rs         # Export/import (full DB dump)
+│   ├── helpers.rs      # Shared: strip_html, make_snippet, decrypt_note/todo/event
+│   └── mod.rs          # Module declarations
+├── crypto/
+│   ├── aes_gcm.rs      # AES-256-GCM encrypt/decrypt
+│   ├── argon2.rs       # Password hashing (Argon2id)
+│   ├── key_derivation.rs # Argon2id key derivation (with legacy SHA-256 compat)
+│   └── manager.rs      # EncryptionManager (holds key in memory via Mutex)
+├── database/
+│   ├── pool.rs         # DbPool init, migration runner
+│   ├── models.rs       # Shared Rust model structs
+│   └── mod.rs
+└── sync/
+    ├── supabase.rs     # HTTP REST client for Supabase
+    ├── conflict.rs     # VectorClock CRDT
+    ├── queue.rs        # Sync queue ops
+    └── manager.rs
+```
+
+## Frontend Structure
+```
+apps/frontend/src/
+├── app/                # Next.js App Router pages
+│   ├── layout.tsx      # Root layout (Inter font, Providers wrapper)
+│   ├── providers.tsx   # QueryClientProvider, ThemeProvider, IdleTimer, UndoRedo
+│   ├── page.tsx        # Dashboard
+│   ├── notes/page.tsx  # Notes with RTE, tags, attachments, search
+│   ├── todos/page.tsx  # Todo list with priorities
+│   ├── calendar/page.tsx # FullCalendar integration
+│   ├── settings/page.tsx # Session timeout, key rotation, sync config
+│   ├── login/page.tsx  # Login form
+│   ├── register/page.tsx # Registration form
+│   ├── unlock/page.tsx # Database unlock screen
+│   └── trash/page.tsx  # Archived items
+├── components/
+│   ├── rich-text-editor.tsx  # TipTap editor with toolbar
+│   ├── undo-redo.tsx         # Undo/redo toast + buttons
+│   ├── idle-timer.tsx        # Auto-lock on idle
+│   ├── notebook-sidebar.tsx  # Sidebar with drag-and-drop reorder
+│   ├── nav-header.tsx        # Top navigation bar
+│   ├── search-palette.tsx    # Cmd+K unified search
+│   └── template-picker.tsx   # Template selection modal
+├── hooks/
+│   ├── useAuth.ts       # Zustand auth store (user, unlock, lock)
+│   ├── useNotes.ts      # React Query + undo stack
+│   ├── useTodos.ts      # React Query + undo stack
+│   ├── useCalendar.ts   # React Query
+│   ├── useNotebooks.ts  # React Query
+│   ├── useTags.ts       # React Query
+│   └── useUndoStack.ts  # Zustand undo stack store
+├── lib/
+│   └── api.ts           # Tauri invoke wrapper (all IPC calls)
+└── types/
+    └── index.ts         # TypeScript interfaces
+```
+
+## Testing
+- **Frontend**: vitest + jsdom + testing-library, 9 test files in `src/__tests__/`
+- **Rust**: Unit tests in each module (`#[cfg(test)]` blocks), run with `cargo test`
+- Tests mock Tauri `invoke` calls — they don't test actual IPC
+- No integration tests or E2E tests exist yet
+- **Known issue**: `components.test.tsx` fails to load due to OXC parser bug with deep JSX nesting (pre-existing, not caused by code changes)
+
+## Migration System
+19 SQL files in `apps/tauri/src-tauri/migrations/`, applied sequentially on startup via `pool.rs`. Idempotent (ignores "duplicate column" errors). New migrations should be added with sequential numbering (020_*, 021_*, etc.).
+
+## Environment
+- Node.js 18+ required
+- Rust 1.70+ with MSVC (Windows) or Xcode CLI (macOS)
+- Tauri CLI installed automatically via pnpm
+- Docker available for web-only mode (nginx + static export)

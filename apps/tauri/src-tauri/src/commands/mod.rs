@@ -11,3 +11,4 @@ pub mod recurring_todos;
 pub mod data;
 pub mod templates;
 pub mod archive;
+pub mod helpers;

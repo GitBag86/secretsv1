@@ -137,7 +137,7 @@ export default function CalendarPage() {
         )}
         {showModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-            <div className="rounded-lg border bg-card p-6 w-full max-w-md shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="rounded-lg border bg-card p-6 w-full max-w-md shadow-lg m-4" onClick={(e) => e.stopPropagation()}>
               <h2 className="text-xl font-bold mb-4">{editingId ? "Edit Event" : "New Event"}</h2>
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event title..." className="w-full mb-3 p-2 border rounded-md bg-background" />
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (optional)..." className="w-full mb-3 p-2 border rounded-md bg-background min-h-[60px]" />

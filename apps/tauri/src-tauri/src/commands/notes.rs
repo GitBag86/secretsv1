@@ -2,10 +2,33 @@ use tauri::State;
 use crate::database::pool::DbPool;
 use crate::crypto::manager::EncryptionManager;
 use crate::sync::enqueue_sync;
+use super::helpers;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Note { pub id: String, pub user_id: String, pub notebook_id: Option<String>, pub title: String, pub content: String, pub word_count: i64, pub reading_time: i64, pub is_pinned: bool, pub is_archived: bool, pub created_at: i64, pub updated_at: i64 }
+
+fn validate_title(title: &str) -> Result<(), String> {
+    if title.is_empty() { return Err("Title cannot be empty".into()); }
+    if title.len() > 10000 { return Err("Title too long (max 10000 chars)".into()); }
+    if title.chars().any(|c| c.is_control() && c != '\n' && c != '\t') {
+        return Err("Title contains invalid control characters".into());
+    }
+    Ok(())
+}
+
+fn validate_content(content: &str) -> Result<(), String> {
+    if content.len() > 1_000_000 { return Err("Content too long (max 1MB)".into()); }
+    Ok(())
+}
+
+/// Decrypt notes returned from DB (title + content).
+pub async fn decrypt_notes(enc: &EncryptionManager, notes: &mut [Note]) {
+    for n in notes {
+        n.title = enc.try_decrypt(&n.title).await;
+        n.content = enc.try_decrypt(&n.content).await;
+    }
+}
 
 #[tauri::command]
 pub async fn list_notes(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<Vec<Note>, String> {
@@ -20,10 +43,7 @@ pub async fn list_notes(pool: State<'_, DbPool>, enc: State<'_, EncryptionManage
         result
     };
     drop(conn);
-    for n in &mut notes {
-        n.title = enc.try_decrypt(&n.title).await;
-        n.content = enc.try_decrypt(&n.content).await;
-    }
+    decrypt_notes(&enc, &mut notes).await;
     Ok(notes)
 }
 
@@ -34,17 +54,18 @@ pub async fn get_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>
         Ok(Note { id: r.get(0)?, user_id: r.get(1)?, notebook_id: r.get(2)?, title: r.get(3)?, content: r.get(4)?, word_count: r.get(5)?, reading_time: r.get(6)?, is_pinned: r.get::<_, i64>(7)? != 0, is_archived: r.get::<_, i64>(8)? != 0, created_at: r.get(9)?, updated_at: r.get(10)? })
     }).map_err(|e| e.to_string())?;
     drop(conn);
-    note.title = enc.try_decrypt(&note.title).await;
-    note.content = enc.try_decrypt(&note.content).await;
+    helpers::decrypt_note(&enc, &mut note).await;
     Ok(note)
 }
 
 #[tauri::command]
 pub async fn create_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, content: String, notebook_id: Option<String>) -> Result<Note, String> {
+    validate_title(&title)?;
+    validate_content(&content)?;
     let id = uuid::Uuid::new_v4().to_string();
     let user_id = "local-user".to_string();
-    let et = enc.encrypt_or_pass(&title).await;
-    let ec = enc.encrypt_or_pass(&content).await;
+    let et = enc.encrypt_or_pass(&title).await.map_err(|e| e.to_string())?;
+    let ec = enc.encrypt_or_pass(&content).await.map_err(|e| e.to_string())?;
     let wc = content.split_whitespace().count() as i64;
     let rt = (wc / 200).max(1);
     let now = chrono::Utc::now().timestamp();
@@ -58,6 +79,8 @@ pub async fn create_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 
 #[tauri::command]
 pub async fn update_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String, title: Option<String>, content: Option<String>, is_pinned: Option<bool>, is_archived: Option<bool>, notebook_id: Option<String>) -> Result<Note, String> {
+    if let Some(ref t) = title { validate_title(t)?; }
+    if let Some(ref c) = content { validate_content(c)?; }
     let (existing, conn) = {
         let conn = pool.get().await.map_err(|e| e.to_string())?;
         let existing = conn.query_row("SELECT id, user_id, notebook_id, title, content, word_count, reading_time, is_pinned, is_archived, created_at, updated_at FROM notes WHERE id = ?1", [&id], |r| {
@@ -65,8 +88,8 @@ pub async fn update_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
         }).map_err(|e| e.to_string())?;
         (existing, conn)
     };
-    let stored_title = if let Some(ref nt) = title { enc.encrypt_or_pass(nt).await } else { existing.title.clone() };
-    let stored_content = if let Some(ref nc) = content { enc.encrypt_or_pass(nc).await } else { existing.content.clone() };
+    let stored_title = if let Some(ref nt) = title { enc.encrypt_or_pass(nt).await.map_err(|e| e.to_string())? } else { existing.title.clone() };
+    let stored_content = if let Some(ref nc) = content { enc.encrypt_or_pass(nc).await.map_err(|e| e.to_string())? } else { existing.content.clone() };
     let resp_title = enc.try_decrypt(&stored_title).await;
     let resp_content = enc.try_decrypt(&stored_content).await;
     let wc = content.as_ref().map(|c| c.split_whitespace().count() as i64).unwrap_or(existing.word_count);
@@ -92,16 +115,7 @@ pub async fn delete_note(pool: State<'_, DbPool>, id: String) -> Result<(), Stri
 }
 
 fn strip_html(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut in_tag = false;
-    for c in s.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ => if !in_tag { out.push(c); }
-        }
-    }
-    out
+    helpers::strip_html(s)
 }
 
 #[tauri::command]
@@ -120,9 +134,8 @@ pub async fn search_notes(pool: State<'_, DbPool>, enc: State<'_, EncryptionMana
     let q = query.to_lowercase();
     let mut out = Vec::new();
     for n in &mut notes {
-        n.title = enc.try_decrypt(&n.title).await;
-        n.content = enc.try_decrypt(&n.content).await;
-        let plain = strip_html(&n.content);
+        helpers::decrypt_note(&enc, n).await;
+        let plain = helpers::strip_html(&n.content);
         if n.title.to_lowercase().contains(&q) || plain.to_lowercase().contains(&q) {
             out.push(n.clone());
         }
