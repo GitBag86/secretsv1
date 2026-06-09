@@ -33,6 +33,8 @@ export default function SettingsPage() {
   const [editTagColor, setEditTagColor] = useState("#6b7280");
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#6b7280");
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const tagUpdate = useMutation({
     mutationFn: ({ id, name, color }: { id: string; name: string; color: string }) =>
@@ -305,25 +307,97 @@ export default function SettingsPage() {
         </section>
 
         <section className="rounded-lg border bg-card p-6 space-y-4">
+          <h2 className="text-lg font-semibold">Export / Import</h2>
+          <p className="text-sm text-muted-foreground">
+            Export all your data as JSON, or import from a previously exported file.
+            Exported data is decrypted and contains all notes, todos, events, notebooks, and tags.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <button
+              disabled={exporting || importing}
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  const json = await api.data.exportData();
+                  const blob = new Blob([json], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `knowledge-base-export-${Date.now()}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch (e: any) {
+                  alert(`Export failed: ${e}`);
+                }
+                setExporting(false);
+              }}
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+            >
+              {exporting ? "Exporting..." : "📥 Export All Data"}
+            </button>
+            <label className="border px-4 py-2 rounded-md text-sm font-medium hover:bg-accent cursor-pointer disabled:opacity-50">
+              {importing ? "Importing..." : "📤 Import JSON"}
+              <input
+                type="file"
+                accept=".json"
+                className="hidden"
+                disabled={exporting || importing}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const text = await file.text();
+                  if (!confirm(`Import "${file.name}"? This will add new entries without overwriting existing ones.`)) {
+                    e.target.value = "";
+                    return;
+                  }
+                  setImporting(true);
+                  try {
+                    const res = await api.data.importData(text);
+                    if (res.errors.length > 0) {
+                      alert(`Import completed with ${res.errors.length} error(s):\n${res.errors.slice(0, 5).join("\n")}${res.errors.length > 5 ? `\n...and ${res.errors.length - 5} more` : ""}`);
+                    } else {
+                      alert(`Import successful!\n${res.notes} notes, ${res.todos} todos, ${res.events} events, ${res.notebooks} notebooks, ${res.tags} tags`);
+                    }
+                    queryClient.invalidateQueries({ queryKey: ["notes"] });
+                    queryClient.invalidateQueries({ queryKey: ["todos"] });
+                    queryClient.invalidateQueries({ queryKey: ["tags"] });
+                    queryClient.invalidateQueries({ queryKey: ["events"] });
+                    queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+                    queryClient.invalidateQueries({ queryKey: ["all-note-tags"] });
+                    queryClient.invalidateQueries({ queryKey: ["all-todo-tags"] });
+                  } catch (e: any) {
+                    alert(`Import failed: ${e}`);
+                  }
+                  setImporting(false);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="rounded-lg border bg-card p-6 space-y-4">
           <h2 className="text-lg font-semibold">Tags</h2>
           <p className="text-sm text-muted-foreground">Manage all tags used across notes and todos.</p>
 
           {/* Create new tag */}
-          <div className="flex items-center gap-2">
-            <input
-              value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreateTag()}
-              placeholder="New tag name..."
-              className="flex-1 p-2 text-sm border rounded-md bg-background"
-            />
-            <input
-              type="color"
-              value={newTagColor}
-              onChange={(e) => setNewTagColor(e.target.value)}
-              className="w-9 h-9 p-0.5 border rounded cursor-pointer"
-              title="Tag color"
-            />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="flex-1 flex gap-2">
+              <input
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateTag()}
+                placeholder="New tag name..."
+                className="flex-1 p-2 text-sm border rounded-md bg-background"
+              />
+              <input
+                type="color"
+                value={newTagColor}
+                onChange={(e) => setNewTagColor(e.target.value)}
+                className="w-9 h-9 p-0.5 border rounded cursor-pointer shrink-0"
+                title="Tag color"
+              />
+            </div>
             <button
               onClick={handleCreateTag}
               disabled={!newTagName.trim() || tagCreate.isPending}
@@ -341,62 +415,73 @@ export default function SettingsPage() {
               {allTags.map((tag) => {
                 const isEditing = editTagId === tag.id;
                 return (
-                  <div key={tag.id} className="flex items-center gap-2 rounded-md border p-2.5">
-                    <div
-                      className="w-3 h-3 rounded-full shrink-0"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                    {isEditing ? (
-                      <>
+                  <div key={tag.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 rounded-md border p-2.5">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <div
+                        className="w-3 h-3 rounded-full shrink-0"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      {isEditing ? (
                         <input
                           value={editTagName}
                           onChange={(e) => setEditTagName(e.target.value)}
                           onKeyDown={(e) => e.key === "Enter" && tagUpdate.mutate({ id: tag.id, name: editTagName, color: editTagColor })}
                           className="flex-1 p-1 text-sm border rounded-md bg-background"
                         />
+                      ) : (
+                        <span className="flex-1 text-sm font-medium">{tag.name}</span>
+                      )}
+                      {!isEditing && <span className="text-xs text-muted-foreground">{tag.color}</span>}
+                    </div>
+                    {isEditing && (
+                      <div className="flex items-center gap-2">
                         <input
                           type="color"
                           value={editTagColor}
                           onChange={(e) => setEditTagColor(e.target.value)}
                           className="w-8 h-8 p-0.5 border rounded cursor-pointer"
                         />
-                        <button
-                          onClick={() => tagUpdate.mutate({ id: tag.id, name: editTagName, color: editTagColor })}
-                          disabled={tagUpdate.isPending}
-                          className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => setEditTagId(null)}
-                          className="text-xs px-2 py-1 rounded border hover:bg-accent"
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="flex-1 text-sm font-medium">{tag.name}</span>
-                        <span className="text-xs text-muted-foreground">{tag.color}</span>
-                        <button
-                          onClick={() => { setEditTagId(tag.id); setEditTagName(tag.name); setEditTagColor(tag.color); }}
-                          className="text-xs px-2 py-1 rounded border hover:bg-accent"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(`Delete tag "${tag.name}"? This will remove it from all notes and todos.`)) {
-                              tagDelete.mutate(tag.id);
-                            }
-                          }}
-                          disabled={tagDelete.isPending}
-                          className="text-xs px-2 py-1 rounded border text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                        >
-                          Delete
-                        </button>
-                      </>
+                      </div>
                     )}
+                    <div className="flex gap-1.5 sm:ml-auto">
+                      {isEditing ? (
+                        <>
+                          <button
+                            onClick={() => tagUpdate.mutate({ id: tag.id, name: editTagName, color: editTagColor })}
+                            disabled={tagUpdate.isPending}
+                            className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditTagId(null)}
+                            className="text-xs px-2 py-1 rounded border hover:bg-accent"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => { setEditTagId(tag.id); setEditTagName(tag.name); setEditTagColor(tag.color); }}
+                            className="text-xs px-2 py-1 rounded border hover:bg-accent"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Delete tag "${tag.name}"? This will remove it from all notes and todos.`)) {
+                                tagDelete.mutate(tag.id);
+                              }
+                            }}
+                            disabled={tagDelete.isPending}
+                            className="text-xs px-2 py-1 rounded border text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 );
               })}

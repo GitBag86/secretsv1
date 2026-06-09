@@ -2,7 +2,7 @@ use tauri::State;
 use crate::database::pool::DbPool;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct RecurringTodo {
     pub id: String,
     pub todo_id: String,
@@ -141,4 +141,88 @@ pub fn advance_recurring_todo(conn: &rusqlite::Connection, todo_id: &str) -> Res
     .map_err(|e| format!("Failed to update recurring_todos for {}: {}", todo_id, e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_recurring() -> RecurringTodo {
+        RecurringTodo {
+            id: "rt-1".into(),
+            todo_id: "todo-1".into(),
+            recurrence_rule: "weekly".into(),
+            next_due_date: 1700000000 + 86_400 * 7,
+            created_at: 1700000000,
+        }
+    }
+
+    #[test]
+    fn recurring_todo_serialize_roundtrip() {
+        let rt = make_recurring();
+        let json = serde_json::to_string(&rt).unwrap();
+        let restored: RecurringTodo = serde_json::from_str(&json).unwrap();
+        assert_eq!(rt, restored);
+    }
+
+    #[test]
+    fn recurring_todo_fields() {
+        let rt = make_recurring();
+        assert_eq!(rt.todo_id, "todo-1");
+        assert_eq!(rt.recurrence_rule, "weekly");
+    }
+
+    #[test]
+    fn advance_date_daily() {
+        let result = advance_date(1700000000, "daily");
+        assert_eq!(result, 1700000000 + 86_400);
+    }
+
+    #[test]
+    fn advance_date_weekly() {
+        let result = advance_date(1700000000, "weekly");
+        assert_eq!(result, 1700000000 + 86_400 * 7);
+    }
+
+    #[test]
+    fn advance_date_biweekly() {
+        let result = advance_date(1700000000, "biweekly");
+        assert_eq!(result, 1700000000 + 86_400 * 14);
+    }
+
+    #[test]
+    fn advance_date_monthly() {
+        let result = advance_date(1700000000, "monthly");
+        assert_eq!(result, 1700000000 + 86_400 * 30);
+    }
+
+    #[test]
+    fn advance_date_quarterly() {
+        let result = advance_date(1700000000, "quarterly");
+        assert_eq!(result, 1700000000 + 86_400 * 91);
+    }
+
+    #[test]
+    fn advance_date_yearly() {
+        let result = advance_date(1700000000, "yearly");
+        assert_eq!(result, 1700000000 + 86_400 * 365);
+    }
+
+    #[test]
+    fn advance_date_unknown_defaults_to_weekly() {
+        let result = advance_date(1700000000, "unknown");
+        assert_eq!(result, 1700000000 + 86_400 * 7);
+    }
+
+    #[test]
+    fn advance_date_zero() {
+        let result = advance_date(0, "daily");
+        assert_eq!(result, 86_400);
+    }
+
+    #[test]
+    fn clone_produces_equal() {
+        let rt = make_recurring();
+        assert_eq!(rt, rt.clone());
+    }
 }

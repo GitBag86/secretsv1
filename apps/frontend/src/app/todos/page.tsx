@@ -164,20 +164,22 @@ export default function TodosPage() {
     <div className="min-h-screen bg-background">
       <NavHeader />
       <main className="container py-6 max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">Todos</h1>
-        <div className="flex gap-2 mb-4">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6">Todos</h1>
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleCreate()} placeholder="Add a new todo..." className="flex-1 p-2 border rounded-md bg-background" />
-          <select value={priority} onChange={(e) => setPriority(e.target.value as any)} className="p-2 border rounded-md bg-background">
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-          <button onClick={handleCreate} disabled={create.isPending} className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90">
-            Add
-          </button>
+          <div className="flex gap-2">
+            <select value={priority} onChange={(e) => setPriority(e.target.value as any)} className="flex-1 p-2 border rounded-md bg-background">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+            <button onClick={handleCreate} disabled={create.isPending} className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90">
+              Add
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search todos..." className="p-1.5 text-sm border rounded-md bg-background w-48" />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 mb-4">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search todos..." className="p-1.5 text-sm border rounded-md bg-background w-full sm:w-48" />
           <div className="flex gap-1">
             {(["all", "active", "completed"] as const).map((f) => (
               <button key={f} onClick={() => setFilter(f)} className={`text-xs px-2.5 py-1 rounded-full border ${filter === f ? "bg-primary text-primary-foreground border-primary" : "hover:bg-accent"}`}>
@@ -185,7 +187,7 @@ export default function TodosPage() {
               </button>
             ))}
           </div>
-          <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} className="text-xs p-1.5 border rounded-md bg-background ml-auto">
+          <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} className="text-xs p-1.5 border rounded-md bg-background sm:ml-auto w-full sm:w-auto">
             <option value="created">Newest</option>
             <option value="due_date">Due date</option>
             <option value="priority">Priority</option>
@@ -237,8 +239,8 @@ export default function TodosPage() {
         ) : (
           <div className="space-y-1.5">
             {filtered.map((todo) => (
-              <div key={todo.id} className="rounded-lg border bg-card p-3.5 shadow-sm">
-                <div className="flex items-center gap-3">
+              <div key={todo.id} className="rounded-lg border bg-card p-3 sm:p-3.5 shadow-sm">
+                <div className="flex items-start sm:items-center gap-2 sm:gap-3">
                   <input type="checkbox" checked={todo.is_completed} onChange={() => toggleTodo(todo.id, todo.is_completed)} className="h-4 w-4" />
                   <div className="flex-1 min-w-0">
                     <p className={`font-medium truncate ${todo.is_completed ? "line-through text-muted-foreground" : ""}`}>{todo.title}</p>
@@ -290,7 +292,7 @@ export default function TodosPage() {
                 <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${todo.priority === "high" ? "bg-red-100 text-red-800" : todo.priority === "medium" ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
                   {todo.priority}
                 </span>
-                <button onClick={() => remove.mutate(todo.id)} className="text-destructive text-sm hover:underline shrink-0">Delete</button>
+                <button onClick={() => remove.mutate(todo.id)} className="text-destructive text-xs sm:text-sm hover:underline shrink-0">Delete</button>
                 </div>
                 {editingTagTodo === todo.id && (
                   <div className="mt-2 pt-2 border-t border-muted">

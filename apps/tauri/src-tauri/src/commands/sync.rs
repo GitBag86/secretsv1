@@ -244,3 +244,33 @@ pub async fn get_sync_config(pool: State<'_, DbPool>) -> Result<serde_json::Valu
         "has_key": key.is_some(),
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn entity_to_table_notes() {
+        assert_eq!(entity_to_table("note"), "notes");
+    }
+
+    #[test]
+    fn entity_to_table_todos() {
+        assert_eq!(entity_to_table("todo"), "todos");
+    }
+
+    #[test]
+    fn entity_to_table_events() {
+        assert_eq!(entity_to_table("event"), "calendar_events");
+    }
+
+    #[test]
+    fn entity_to_table_unknown_returns_self() {
+        assert_eq!(entity_to_table("custom"), "custom");
+    }
+
+    #[test]
+    fn entity_to_table_empty() {
+        assert_eq!(entity_to_table(""), "");
+    }
+}

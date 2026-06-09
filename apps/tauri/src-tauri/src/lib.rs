@@ -80,6 +80,8 @@ pub fn run() {
             commands::recurring_todos::set_recurrence,
             commands::recurring_todos::remove_recurrence,
             commands::recurring_todos::list_recurring_todos,
+            commands::data::export_data,
+            commands::data::import_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

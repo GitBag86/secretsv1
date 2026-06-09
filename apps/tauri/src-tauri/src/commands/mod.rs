@@ -8,3 +8,4 @@ pub mod sync;
 pub mod tags;
 pub mod attachments;
 pub mod recurring_todos;
+pub mod data;

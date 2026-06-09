@@ -93,6 +93,11 @@ export const api = {
     remove: (todoId: string) => invoke<void>("remove_recurrence", { todoId }),
     list: () => invoke<RecurringTodo[]>("list_recurring_todos"),
   },
+  data: {
+    exportData: () => invoke<string>("export_data"),
+    importData: (data: string) =>
+      invoke<{ notes: number; todos: number; events: number; notebooks: number; tags: number; note_tags: number; todo_tags: number; errors: string[] }>("import_data", { data }),
+  },
   sync: {
     push: () => invoke<{ pushed: number; total: number; remaining: number; errors: string[] }>("sync_push"),
     pull: () => invoke<{ pulled: number; pending: number; errors: string[] }>("sync_pull"),

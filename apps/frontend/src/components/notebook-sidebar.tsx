@@ -9,6 +9,7 @@ export function NotebookSidebar({ activeNotebook, onSelect }: { activeNotebook: 
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [color, setColor] = useState(defaultColors[0]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const dragIdx = useRef<number | null>(null);
 
   const handleCreate = async () => {
@@ -37,10 +38,10 @@ export function NotebookSidebar({ activeNotebook, onSelect }: { activeNotebook: 
     });
   };
 
-  return (
-    <aside className="w-56 border-r bg-card shrink-0 flex flex-col">
+  const sidebarContent = (
+    <>
       <div className="p-3 border-b">
-        <button onClick={() => onSelect(null)} className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium ${activeNotebook === null ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>
+        <button onClick={() => { onSelect(null); setSidebarOpen(false); }} className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium ${activeNotebook === null ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>
           All Notes
         </button>
       </div>
@@ -76,7 +77,7 @@ export function NotebookSidebar({ activeNotebook, onSelect }: { activeNotebook: 
             onDrop={() => handleDrop(idx)}
             className="flex items-center gap-1 group"
           >
-            <button onClick={() => onSelect(nb.id)} className={`flex-1 text-left px-3 py-1.5 rounded-md text-sm truncate ${activeNotebook === nb.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent"}`}>
+            <button onClick={() => { onSelect(nb.id); setSidebarOpen(false); }} className={`flex-1 text-left px-3 py-1.5 rounded-md text-sm truncate ${activeNotebook === nb.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent"}`}>
               <span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: nb.color }} />
               {nb.name}
             </button>
@@ -84,6 +85,44 @@ export function NotebookSidebar({ activeNotebook, onSelect }: { activeNotebook: 
           </div>
         ))}
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex w-56 border-r bg-card shrink-0 flex-col">
+        {sidebarContent}
+      </aside>
+      {/* Mobile sidebar toggle button */}
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="md:hidden fixed bottom-4 left-4 z-40 bg-primary text-primary-foreground p-3 rounded-full shadow-lg hover:bg-primary/90"
+        aria-label="Open notebooks"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div className="md:hidden fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+          <aside className="absolute left-0 top-0 bottom-0 w-64 bg-card border-r shadow-xl flex flex-col">
+            <div className="p-3 border-b flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Notebooks</span>
+              <button onClick={() => setSidebarOpen(false)} className="p-1 rounded-md hover:bg-accent" aria-label="Close">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {sidebarContent}
+            </div>
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

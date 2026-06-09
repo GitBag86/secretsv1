@@ -68,10 +68,10 @@ export default function Home() {
     <div className="min-h-screen bg-background">
       <NavHeader />
       <main className="container py-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Welcome to your personal knowledge base</p>
+            <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">Welcome to your personal knowledge base</p>
           </div>
         </div>
 
@@ -106,7 +106,7 @@ export default function Home() {
             />
             <StatCard
               href="/todos"
-              label="To Do"
+              label="Priority"
               value={stats.highPriority}
               sub={`${stats.overdueTodos} overdue · ${stats.dueSoon} due soon`}
               icon="🔥"
@@ -184,9 +184,7 @@ export default function Home() {
               View calendar →
             </Link>
           </div>
-        </div>
-
-        {/* Recent Notes + Quick Links */}
+        </div>          {/* Recent Notes + Popular Tags */}
         <div className="grid gap-6 md:grid-cols-2">
           {/* Recent Notes */}
           <div className="rounded-xl border bg-card p-6 shadow-sm">
@@ -262,14 +260,14 @@ function StatCard({
   href: string; label: string; value: number; sub: string; icon: string; color: string;
 }) {
   return (
-    <Link href={href} className={`rounded-xl border bg-gradient-to-br ${color} p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5`}>
+    <Link href={href} className={`rounded-xl border bg-gradient-to-br ${color} p-4 sm:p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5`}>
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">{label}</p>
-          <p className="text-3xl font-bold mt-1">{value}</p>
-          <p className="text-xs text-muted-foreground mt-1.5">{sub}</p>
+          <p className="text-xs sm:text-sm font-medium text-muted-foreground">{label}</p>
+          <p className="text-2xl sm:text-3xl font-bold mt-1">{value}</p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5">{sub}</p>
         </div>
-        <span className="text-2xl">{icon}</span>
+        <span className="text-xl sm:text-2xl">{icon}</span>
       </div>
     </Link>
   );

@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Tag { pub id: String, pub user_id: String, pub name: String, pub color: String, pub created_at: i64 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct NoteTag { pub note_id: String, pub tag_id: String }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct TodoTag { pub todo_id: String, pub tag_id: String }
 
 #[tauri::command]
@@ -159,3 +159,55 @@ pub async fn list_all_note_tags(pool: State<'_, DbPool>) -> Result<Vec<NoteTag>,
     for row in rows { if let Ok(nt) = row { note_tags.push(nt); } }
     Ok(note_tags)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_note_tag() -> NoteTag {
+        NoteTag { note_id: "note-1".into(), tag_id: "tag-1".into() }
+    }
+
+    fn make_todo_tag() -> TodoTag {
+        TodoTag { todo_id: "todo-1".into(), tag_id: "tag-1".into() }
+    }
+
+    #[test]
+    fn note_tag_serialize_roundtrip() {
+        let nt = make_note_tag();
+        let json = serde_json::to_string(&nt).unwrap();
+        let restored: NoteTag = serde_json::from_str(&json).unwrap();
+        assert_eq!(nt, restored);
+    }
+
+    #[test]
+    fn note_tag_fields() {
+        let nt = make_note_tag();
+        assert_eq!(nt.note_id, "note-1");
+        assert_eq!(nt.tag_id, "tag-1");
+    }
+
+    #[test]
+    fn todo_tag_serialize_roundtrip() {
+        let tt = make_todo_tag();
+        let json = serde_json::to_string(&tt).unwrap();
+        let restored: TodoTag = serde_json::from_str(&json).unwrap();
+        assert_eq!(tt, restored);
+    }
+
+    #[test]
+    fn todo_tag_fields() {
+        let tt = make_todo_tag();
+        assert_eq!(tt.todo_id, "todo-1");
+        assert_eq!(tt.tag_id, "tag-1");
+    }
+
+    #[test]
+    fn clone_produces_equal() {
+        let nt = make_note_tag();
+        let tt = make_todo_tag();
+        assert_eq!(nt, nt.clone());
+        assert_eq!(tt, tt.clone());
+    }
+}
+

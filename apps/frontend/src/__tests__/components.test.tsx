@@ -36,7 +36,7 @@ vi.mock("@/hooks", () => ({
   }),
   useNotes: () => ({
     notes: [
-      { id: "1", title: "Test Note", content: "Content", word_count: 5, reading_time: 1, is_pinned: false, is_archived: false },
+      { id: "1", title: "Test Note", content: "Content", word_count: 5, reading_time: 1, is_pinned: false, is_archived: false, user_id: "u1", created_at: 1700000000, updated_at: 1700000000 },
     ],
     isLoading: false,
     create: { mutateAsync: vi.fn(), isPending: false },
@@ -45,8 +45,8 @@ vi.mock("@/hooks", () => ({
   }),
   useTodos: () => ({
     todos: [
-      { id: "1", title: "Buy milk", is_completed: false, priority: "high" },
-      { id: "2", title: "Done task", is_completed: true, priority: "low" },
+      { id: "1", title: "Buy milk", is_completed: false, priority: "high", created_at: 1700000000, updated_at: 1700000000 },
+      { id: "2", title: "Done task", is_completed: true, priority: "low", created_at: 1700000000, updated_at: 1700000000 },
     ],
     isLoading: false,
     create: { mutateAsync: vi.fn(), isPending: false },
@@ -57,7 +57,7 @@ vi.mock("@/hooks", () => ({
   }),
   useCalendar: () => ({
     events: [
-      { id: "e1", title: "Meeting", start_time: 1700000000, end_time: 1700003600, all_day: false, color: "#3b82f6" },
+      { id: "e1", title: "Meeting", start_time: 1700000000, end_time: 1700003600, all_day: false, color: "#3b82f6", user_id: "u1", created_at: 1700000000, updated_at: 1700000000 },
     ],
     isLoading: false,
     create: { mutateAsync: vi.fn(), isPending: false },
@@ -70,24 +70,82 @@ import NotesPage from "@/app/notes/page";
 import TodosPage from "@/app/todos/page";
 import CalendarPage from "@/app/calendar/page";
 
+// The dashboard uses direct useQuery calls rather than wrappers, so we need
+// a QueryClientProvider with pre-populated data to prevent it from hanging.
+function createDashboardWrapper() {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  // Pre-populate all queries the dashboard uses
+  qc.setQueryData(["notes"], []);
+  qc.setQueryData(["todos"], []);
+  qc.setQueryData(["notebooks"], []);
+  qc.setQueryData(["calendar"], []);
+  qc.setQueryData(["tags"], []);
+  qc.setQueryData(["all-todo-tags"], []);
+  qc.setQueryData(["all-note-tags"], []);
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return createElement(QueryClientProvider, { client: qc }, children);
+  };
+}
+
 describe("Dashboard page", () => {
   it("renders dashboard heading", () => {
-    render(createElement(Home));
+    render(createElement(createDashboardWrapper(), null, createElement(Home)));
     expect(screen.getByText("Dashboard")).toBeDefined();
   });
 
   it("renders navigation links", () => {
-    render(createElement(Home));
+    render(createElement(createDashboardWrapper(), null, createElement(Home)));
     expect(screen.getAllByText("Notes").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Todos").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Calendar").length).toBeGreaterThanOrEqual(1);
   });
 
-  it("renders feature cards", () => {
-    render(createElement(Home));
-    expect(screen.getByText("Create and organize your thoughts")).toBeDefined();
-    expect(screen.getByText("Track your tasks and goals")).toBeDefined();
-    expect(screen.getByText("Manage your schedule")).toBeDefined();
+  it("renders stat cards", () => {
+    render(createElement(createDashboardWrapper(), null, createElement(Home)));
+    expect(screen.getByText("Notes")).toBeDefined();
+    expect(screen.getByText("Events")).toBeDefined();
+    // All stat cards show 0 since we seeded empty data
+    expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("renders empty states", () => {
+    render(createElement(createDashboardWrapper(), null, createElement(Home)));
+    expect(screen.getByText("No events in the next 7 days.")).toBeDefined();
+    expect(screen.getByText("No notes yet.")).toBeDefined();
+    expect(screen.getByText("No tags yet.")).toBeDefined();
+  });
+
+  it("renders section headings", () => {
+    render(createElement(createDashboardWrapper(), null, createElement(Home)));
+    expect(screen.getByText("Todo Progress")).toBeDefined();
+    expect(screen.getByText("Upcoming Events")).toBeDefined();
+    expect(screen.getByText("Recent Notes")).toBeDefined();
+    expect(screen.getByText("Popular Tags")).toBeDefined();
+  });
+
+  it("shows todo progress when data is available", () => {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    qc.setQueryData(["notes"], []);
+    qc.setQueryData(["todos"], [
+      { id: "1", title: "Task 1", is_completed: true, priority: "high", created_at: 1700000000, updated_at: 1700000000 },
+      { id: "2", title: "Task 2", is_completed: false, priority: "low", created_at: 1700000000, updated_at: 1700000000 },
+    ]);
+    qc.setQueryData(["notebooks"], []);
+    qc.setQueryData(["calendar"], []);
+    qc.setQueryData(["tags"], []);
+    qc.setQueryData(["all-todo-tags"], []);
+    qc.setQueryData(["all-note-tags"], []);
+    render(createElement(
+      (props: any) => createElement(QueryClientProvider, { client: qc }, props.children),
+      null,
+      createElement(Home),
+    ));
+    expect(screen.getByText("1 of 2 tasks completed")).toBeDefined();
+    expect(screen.getByText("50% complete")).toBeDefined();
   });
 });
 

@@ -5,7 +5,7 @@ use base64::Engine;
 use crate::database::pool::DbPool;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Attachment {
     pub id: String,
     pub user_id: String,
@@ -158,7 +158,7 @@ pub async fn open_attachment(
     Ok(())
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct AttachmentCount {
     pub note_id: String,
     pub count: i64,
@@ -180,4 +180,75 @@ pub async fn get_all_attachment_counts(pool: State<'_, DbPool>) -> Result<Vec<At
         }
     }
     Ok(counts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_attachment() -> Attachment {
+        Attachment {
+            id: "att-1".into(),
+            user_id: "user-1".into(),
+            note_id: "note-1".into(),
+            filename: "photo.jpg".into(),
+            mime_type: "image/jpeg".into(),
+            size: 1024,
+            storage_path: "/tmp/attachments/uuid.jpg".into(),
+            encrypted: false,
+            created_at: 1700000000,
+        }
+    }
+
+    fn make_count() -> AttachmentCount {
+        AttachmentCount { note_id: "note-1".into(), count: 3 }
+    }
+
+    #[test]
+    fn attachment_serialize_roundtrip() {
+        let a = make_attachment();
+        let json = serde_json::to_string(&a).unwrap();
+        let restored: Attachment = serde_json::from_str(&json).unwrap();
+        assert_eq!(a, restored);
+    }
+
+    #[test]
+    fn attachment_fields() {
+        let a = make_attachment();
+        assert_eq!(a.filename, "photo.jpg");
+        assert_eq!(a.mime_type, "image/jpeg");
+        assert_eq!(a.size, 1024);
+        assert!(!a.encrypted);
+    }
+
+    #[test]
+    fn attachment_encrypted_flag() {
+        let mut a = make_attachment();
+        a.encrypted = true;
+        let json = serde_json::to_string(&a).unwrap();
+        assert!(json.contains("true"));
+    }
+
+    #[test]
+    fn attachment_count_serialize_roundtrip() {
+        let c = make_count();
+        let json = serde_json::to_string(&c).unwrap();
+        let restored: AttachmentCount = serde_json::from_str(&json).unwrap();
+        assert_eq!(c, restored);
+    }
+
+    #[test]
+    fn attachment_count_fields() {
+        let c = make_count();
+        assert_eq!(c.note_id, "note-1");
+        assert_eq!(c.count, 3);
+    }
+
+    #[test]
+    fn clone_produces_equal() {
+        let a = make_attachment();
+        let c = make_count();
+        assert_eq!(a, a.clone());
+        assert_eq!(c, c.clone());
+    }
 }
