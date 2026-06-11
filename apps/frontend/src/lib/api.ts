@@ -51,7 +51,7 @@ export const api = {
       invoke<{ salt: string }>("set_master_password", { password }),
     getSalt: () => invoke<string | null>("get_encryption_salt"),
     rotate: (currentPassword: string, newPassword: string) =>
-      invoke<{ rotated: boolean; notes: number; todos: number; events: number }>("rotate_encryption_key", { currentPassword, newPassword }),
+      invoke<{ rotated: boolean; notes: number; todos: number; events: number; attachments: number }>("rotate_encryption_key", { currentPassword, newPassword }),
   },
   notebooks: {
     list: () => invoke<Notebook[]>("list_notebooks"),

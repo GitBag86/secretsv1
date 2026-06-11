@@ -125,89 +125,100 @@ pub async fn unified_search(
         return Ok(Vec::new());
     }
     let q = query.to_lowercase();
-    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    
+    // Phase 1: Load all rows from DB, then drop the lock before async decryption
+    let (note_rows, todo_rows, event_rows) = {
+        let conn = pool.get().await.map_err(|e| e.to_string())?;
+
+        let notes: Vec<(String, String, String)> = {
+            let mut stmt = conn.prepare("SELECT id, title, content FROM notes WHERE is_archived = 0").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+            }).map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            for row in rows { if let Ok(r) = row { out.push(r); } }
+            out
+        };
+
+        let todos: Vec<(String, String, Option<String>)> = {
+            let mut stmt = conn.prepare("SELECT id, title, description FROM todos WHERE is_archived = 0").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?))
+            }).map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            for row in rows { if let Ok(r) = row { out.push(r); } }
+            out
+        };
+
+        let events: Vec<(String, String, Option<String>, i64)> = {
+            let mut stmt = conn.prepare("SELECT id, title, description, start_time FROM calendar_events").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, i64>(3)?))
+            }).map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            for row in rows { if let Ok(r) = row { out.push(r); } }
+            out
+        };
+
+        (notes, todos, events)
+    }; // conn lock dropped here — decryption happens without holding the DB lock
+
     let mut results = Vec::new();
 
-    // Search notes
-    {
-        let mut stmt = conn.prepare("SELECT id, title, content FROM notes WHERE is_archived = 0").map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
-        }).map_err(|e| e.to_string())?;
-        for row in rows {
-            if let Ok((id, title, content)) = row {
-                let dec_title = enc.try_decrypt(&title).await;
-                let dec_content = enc.try_decrypt(&content).await;
-                let plain = helpers::strip_html(&dec_content);
-                if dec_title.to_lowercase().contains(&q) || plain.to_lowercase().contains(&q) {
-                    let (snippet, _) = helpers::make_snippet(&plain, &q, 40, 60);
-                    results.push(UnifiedSearchItem {
-                        id, title: dec_title, snippet,
-                        entity_type: "note".into(),
-                        url: "/notes".into(),
-                        subtitle: "Note".into(),
-                    });
-                }
-            }
+    // Search notes (no DB lock held)
+    for (id, title, content) in &note_rows {
+        let dec_title = enc.try_decrypt(title).await;
+        let dec_content = enc.try_decrypt(content).await;
+        let plain = helpers::strip_html(&dec_content);
+        if dec_title.to_lowercase().contains(&q) || plain.to_lowercase().contains(&q) {
+            let (snippet, _) = helpers::make_snippet(&plain, &q, 40, 60);
+            results.push(UnifiedSearchItem {
+                id: id.clone(), title: dec_title, snippet,
+                entity_type: "note".into(),
+                url: "/notes".into(),
+                subtitle: "Note".into(),
+            });
         }
     }
 
-    // Search todos
-    {
-        let mut stmt = conn.prepare("SELECT id, title, description FROM todos WHERE is_archived = 0").map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?))
-        }).map_err(|e| e.to_string())?;
-        for row in rows {
-            if let Ok((id, title, description)) = row {
-                let dec_title = enc.try_decrypt(&title).await;
-                let dec_desc = if let Some(ref d) = description { enc.try_decrypt(d).await } else { String::new() };
-                if dec_title.to_lowercase().contains(&q) || dec_desc.to_lowercase().contains(&q) {
-                    let (snippet, _) = helpers::make_snippet(&dec_desc, &q, 0, 80);
-                    let snippet = if snippet.is_empty() && !dec_desc.is_empty() {
-                        if dec_desc.len() > 80 { format!("{}...", &dec_desc[..80]) } else { dec_desc.clone() }
-                    } else { snippet };
-                    results.push(UnifiedSearchItem {
-                        id, title: dec_title, snippet,
-                        entity_type: "todo".into(),
-                        url: "/todos".into(),
-                        subtitle: if dec_desc.is_empty() { "Todo".into() } else { format!("Todo — {}", dec_desc.lines().next().unwrap_or("")) },
-                    });
-                }
-            }
+    // Search todos (no DB lock held)
+    for (id, title, description) in &todo_rows {
+        let dec_title = enc.try_decrypt(title).await;
+        let dec_desc = if let Some(ref d) = description { enc.try_decrypt(d).await } else { String::new() };
+        if dec_title.to_lowercase().contains(&q) || dec_desc.to_lowercase().contains(&q) {
+            let (snippet, _) = helpers::make_snippet(&dec_desc, &q, 0, 80);
+            let snippet = if snippet.is_empty() && !dec_desc.is_empty() {
+                if dec_desc.len() > 80 { format!("{}...", &dec_desc[..80]) } else { dec_desc.clone() }
+            } else { snippet };
+            results.push(UnifiedSearchItem {
+                id: id.clone(), title: dec_title, snippet,
+                entity_type: "todo".into(),
+                url: "/todos".into(),
+                subtitle: if dec_desc.is_empty() { "Todo".into() } else { format!("Todo — {}", dec_desc.lines().next().unwrap_or("")) },
+            });
         }
     }
 
-    // Search calendar events
-    {
-        let mut stmt = conn.prepare("SELECT id, title, description, start_time FROM calendar_events").map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, i64>(3)?))
-        }).map_err(|e| e.to_string())?;
-        for row in rows {
-            if let Ok((id, title, description, start_time)) = row {
-                let dec_title = enc.try_decrypt(&title).await;
-                let dec_desc = if let Some(ref d) = description { enc.try_decrypt(d).await } else { String::new() };
-                if dec_title.to_lowercase().contains(&q) || dec_desc.to_lowercase().contains(&q) {
-                    let (snippet, _) = helpers::make_snippet(&dec_desc, &q, 0, 80);
-                    let snippet = if snippet.is_empty() && !dec_desc.is_empty() {
-                        if dec_desc.len() > 80 { format!("{}...", &dec_desc[..80]) } else { dec_desc.clone() }
-                    } else { snippet };
-                    let date_str = chrono::DateTime::from_timestamp(start_time, 0)
-                        .map(|dt| dt.format("%b %d").to_string())
-                        .unwrap_or_default();
-                    results.push(UnifiedSearchItem {
-                        id, title: dec_title, snippet,
-                        entity_type: "event".into(),
-                        url: "/calendar".into(),
-                        subtitle: format!("Event — {}", date_str),
-                    });
-                }
-            }
+    // Search calendar events (no DB lock held)
+    for (id, title, description, start_time) in &event_rows {
+        let dec_title = enc.try_decrypt(title).await;
+        let dec_desc = if let Some(ref d) = description { enc.try_decrypt(d).await } else { String::new() };
+        if dec_title.to_lowercase().contains(&q) || dec_desc.to_lowercase().contains(&q) {
+            let (snippet, _) = helpers::make_snippet(&dec_desc, &q, 0, 80);
+            let snippet = if snippet.is_empty() && !dec_desc.is_empty() {
+                if dec_desc.len() > 80 { format!("{}...", &dec_desc[..80]) } else { dec_desc.clone() }
+            } else { snippet };
+            let date_str = chrono::DateTime::from_timestamp(*start_time, 0)
+                .map(|dt| dt.format("%b %d").to_string())
+                .unwrap_or_default();
+            results.push(UnifiedSearchItem {
+                id: id.clone(), title: dec_title, snippet,
+                entity_type: "event".into(),
+                url: "/calendar".into(),
+                subtitle: format!("Event — {}", date_str),
+            });
         }
     }
-
-    drop(conn);
     Ok(results)
 }
 

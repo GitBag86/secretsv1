@@ -85,6 +85,7 @@ pub async fn rotate_encryption_key(pool: State<'_, DbPool>, enc: State<'_, Encry
     let mut note_count = 0usize;
     let mut todo_count = 0usize;
     let mut event_count = 0usize;
+    let mut attachment_count = 0usize;
 
     // Use a transaction for atomicity — if re-encryption fails, ROLLBACK preserves old key + salt
     conn.execute("BEGIN TRANSACTION", []).map_err(|e| e.to_string())?;
@@ -202,6 +203,41 @@ pub async fn rotate_encryption_key(pool: State<'_, DbPool>, enc: State<'_, Encry
         event_count += 1;
     }
 
+    // Re-encrypt attachment files on disk
+    let attachment_rows: Vec<(String, String, String)> = {
+        let mut stmt = conn.prepare("SELECT id, storage_path, filename FROM attachments WHERE encrypted = 1").map_err(|e| {
+            let _ = conn.execute("ROLLBACK", []);
+            e.to_string()
+        })?;
+        let mut out = Vec::new();
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))).map_err(|e| {
+            let _ = conn.execute("ROLLBACK", []);
+            e.to_string()
+        })?;
+        for row in rows { if let Ok(r) = row { out.push(r); } }
+        out
+    };
+    // Read, decrypt, re-encrypt, and write each attachment file
+    for (id, storage_path, _filename) in &attachment_rows {
+        let raw_data = std::fs::read(storage_path).map_err(|e| {
+            let _ = conn.execute("ROLLBACK", []);
+            format!("Failed to read attachment {}: {}", id, e)
+        })?;
+        let decrypted = crypto::aes_gcm::decrypt(&old_key, &raw_data).map_err(|e| {
+            let _ = conn.execute("ROLLBACK", []);
+            format!("Failed to decrypt attachment {}: {}", id, e)
+        })?;
+        let re_encrypted = crypto::aes_gcm::encrypt(&new_key, &decrypted).map_err(|e| {
+            let _ = conn.execute("ROLLBACK", []);
+            format!("Failed to re-encrypt attachment {}: {}", id, e)
+        })?;
+        std::fs::write(storage_path, &re_encrypted).map_err(|e| {
+            let _ = conn.execute("ROLLBACK", []);
+            format!("Failed to write attachment {}: {}", id, e)
+        })?;
+        attachment_count += 1;
+    }
+
     // Update salt and password hash — if this fails, ROLLBACK
     conn.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('encryption_salt', ?1, ?2)", (&new_versioned_salt, chrono::Utc::now().timestamp())).map_err(|e| {
         let _ = conn.execute("ROLLBACK", []);
@@ -218,5 +254,5 @@ pub async fn rotate_encryption_key(pool: State<'_, DbPool>, enc: State<'_, Encry
     // Commit transaction — if any step above failed, we already ROLLBACKed and returned Err
     conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
     drop(conn);
-    Ok(serde_json::json!({ "rotated": true, "notes": note_count, "todos": todo_count, "events": event_count }))
+    Ok(serde_json::json!({ "rotated": true, "notes": note_count, "todos": todo_count, "events": event_count, "attachments": attachment_count }))
 }
