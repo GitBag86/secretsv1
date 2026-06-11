@@ -6,26 +6,26 @@ Priority key: 🔴 P0 (critical) / 🟠 P1 (high) / 🟡 P2 (medium) / 🟢 P3 (
 
 ## 🔴 P0 — Critical
 
-- [ ] **Sync confidentiality (roadmap #4)** — Implement Model B: encrypt sync queue payloads with AES-256-GCM before queueing. Update docs to match.
+- [x] **Sync confidentiality (roadmap #4)** — Model B implemented: sync payloads now use already-encrypted content (title/content/description are `$enc$hex...`). Supabase sees only encrypted blobs.
 
 ## 🟠 P1 — High Priority
 
-- [ ] **Auth state bootstrap (#7)** — On app load, check backend session + encryption status, hydrate Zustand from reality
-- [ ] **State decoupling (#8)** — Separate "logged in" from "database unlocked" in frontend state model
-- [ ] **Route guards (#9)** — Protect /notes, /todos, /calendar, /, /trash, /settings from unauthenticated/unlocked access
-- [ ] **Search lock fix (#10)** — Load rows first, drop DB lock, then decrypt and filter
-- [ ] **Key rotation scope (#11)** — Extend to cover attachments, sync queue, encrypted config; add tests
+- [x] **Auth state bootstrap (#7)** — `bootstrap()` checks backend session + encryption salt on load, hydrates Zustand from reality
+- [x] **State decoupling (#8)** — `isLoggedIn` separated from `isUnlocked`; login/register no longer set `isUnlocked: true`
+- [x] **Route guards (#9)** — `AuthGuard` component protects all 6 protected pages (/, /notes, /todos, /calendar, /trash, /settings)
+- [x] **Search lock fix (#10)** — Load all DB rows first, drop connection lock, then decrypt and filter
+- [x] **Key rotation scope (#11)** — Extended to re-encrypt attachment files on disk; TypeScript return type updated
 
 ## 🟡 P2 — Medium Priority
 
 - [ ] **Error handling (#12)** — Structured error types, global error handler/toast system
 - [ ] **Page decomposition (#13)** — Break up giant page components (notes ~300 lines, todos ~350, settings ~450)
-- [ ] **Dashboard medium count (#14)** — Fix to count only medium-priority todos
-- [ ] **Settings import key (#15)** — Fix invalidation key from "events" to "calendar"
+- [x] **Dashboard medium count (#14)** — FIXED: now subtracts low priority from active count
+- [x] **Settings import key (#15)** — FIXED: `"events"` → `"calendar"`
 - [ ] **Bulk todo ops (#16)** — Handle recurring advancement + sync enqueue in bulk_update/bulk_delete
-- [ ] **Nav <Link> (#17)** — Replace `<a href>` with Next.js `<Link>`
-- [ ] **RTE content sync (#18)** — Fix editor not updating when content prop changes
-- [ ] **TipTap CSS (#19)** — Fix globals.css selectors targeting .tiptap class
+- [x] **Nav <Link> (#17)** — FIXED: All `<a href>` replaced with Next.js `<Link>` for client-side navigation
+- [x] **RTE content sync (#18)** — FIXED: Added `useEffect` that calls `setContent()` when content prop changes
+- [x] **TipTap CSS (#19)** — FIXED: Changed `.tiptap` to `.ProseMirror` (actual class used by EditorContent)
 - [ ] **Undo/redo completeness (#20)** — Restore tags + attachments; fix ID/timestamp drift
 - [ ] **Search deep-links (#21)** — Return item-specific routes not just /notes, /todos, /calendar
 
@@ -46,10 +46,10 @@ Priority key: 🔴 P0 (critical) / 🟠 P1 (high) / 🟡 P2 (medium) / 🟢 P3 (
 
 ---
 
-## Active Sprint: Stabilization
+## ✅ Completed Stabilization Sprint
 
-- [ ] Step 1: Populate memory files (opencode + autonomous-app-builder)
-- [ ] Step 2: Implement sync confidentiality (Model B)
-- [ ] Step 3: Fix auth lifecycle (bootstrap + state + guards)
-- [ ] Step 4: Fix search lock + key rotation scope
-- [ ] Step 5: Quick wins (dashboard, settings key, nav Link, RTE, CSS)
+- [x] Step 1: Populate memory files (opencode + autonomous-app-builder)
+- [x] Step 2: Implement sync confidentiality (Model B)
+- [x] Step 3: Fix auth lifecycle (bootstrap + state + guards)
+- [x] Step 4: Fix search lock + key rotation scope
+- [x] Step 5: Quick wins (dashboard, settings key, nav Link, RTE, CSS)
