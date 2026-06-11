@@ -58,7 +58,7 @@ pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     let now = chrono::Utc::now().timestamp();
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("INSERT INTO todos (id, user_id, title, description, priority, due_date, is_archived, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,0,?7,?8)", (&id, &user_id, &et, &ed, &p, &due_date, now, now)).map_err(|e| e.to_string())?;
-    let payload = serde_json::json!({"id": &id, "title": &title, "description": &description, "priority": &p, "due_date": &due_date, "is_completed": false, "created_at": now, "updated_at": now});
+    let payload = serde_json::json!({"id": &id, "title": &et, "description": &ed, "priority": &p, "due_date": &due_date, "is_completed": false, "created_at": now, "updated_at": now});
     enqueue_sync(&conn, "todo", &id, "create", Some(&payload.to_string())).ok();
     drop(conn);
     Ok(Todo { id, user_id, title, description, is_completed: false, priority: p, due_date, created_at: now, updated_at: now })
@@ -108,7 +108,7 @@ pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     }
 
     conn.execute("UPDATE todos SET title=?1, description=?2, is_completed=?3, priority=?4, due_date=?5, updated_at=?6 WHERE id=?7", (&stored_t, &stored_d, c as i64, &p, &dd, now, &id)).map_err(|e| e.to_string())?;
-    let payload = serde_json::json!({"id": &id, "title": &resp_t, "description": &resp_d, "is_completed": c, "priority": &p, "due_date": &dd, "updated_at": now});
+    let payload = serde_json::json!({"id": &id, "title": &stored_t, "description": &stored_d, "is_completed": c, "priority": &p, "due_date": &dd, "updated_at": now});
     enqueue_sync(&conn, "todo", &id, "update", Some(&payload.to_string())).ok();
     drop(conn);
     Ok(Todo { id, user_id: existing.user_id, title: resp_t, description: resp_d, is_completed: c, priority: p, due_date: dd, created_at: existing.created_at, updated_at: now })
