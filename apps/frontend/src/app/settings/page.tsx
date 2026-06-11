@@ -1,4 +1,5 @@
 "use client";
+import { AuthGuard } from "@/components/auth-guard";
 import { NavHeader } from "@/components/nav-header";
 import { useAuth } from "@/hooks";
 import { api } from "@/lib/api";
@@ -160,6 +161,7 @@ export default function SettingsPage() {
   };
 
   return (
+    <AuthGuard>
     <div className="min-h-screen bg-background">
       <NavHeader />
       <main className="container py-6 max-w-2xl mx-auto space-y-8">
@@ -555,5 +557,6 @@ export default function SettingsPage() {
         </section>
       </main>
     </div>
+    </AuthGuard>
   );
 }

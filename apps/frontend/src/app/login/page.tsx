@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
@@ -9,8 +9,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { setUser, setUnlocked } = useAuth();
+  const { setUser, setLoggedIn, isLoggedIn, isUnlocked, isHydrated } = useAuth();
   const router = useRouter();
+
+  // Already logged in? Redirect accordingly
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (isLoggedIn && isUnlocked) router.push("/");
+    else if (isLoggedIn && !isUnlocked) router.push("/unlock");
+  }, [isHydrated, isLoggedIn, isUnlocked, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,8 +26,8 @@ export default function LoginPage() {
     try {
       const res = await api.auth.login(email, password);
       setUser(res.user);
-      setUnlocked(true);
-      router.push("/");
+      setLoggedIn(true);
+      router.push("/unlock");
     } catch (err: any) {
       setError(typeof err === "string" ? err : "Login failed");
     } finally {

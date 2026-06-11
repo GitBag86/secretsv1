@@ -23,8 +23,15 @@ export default function UnlockPage() {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [hasSalt, setHasSalt] = useState(false);
-  const { unlock, setupMasterPassword } = useAuth();
+  const { unlock, setupMasterPassword, isUnlocked, isHydrated } = useAuth();
   const router = useRouter();
+
+  // Already unlocked? Go to dashboard
+  useEffect(() => {
+    if (isHydrated && isUnlocked) {
+      router.push("/");
+    }
+  }, [isHydrated, isUnlocked, router]);
 
   useEffect(() => {
     api.encryption.getSalt().then((salt) => {

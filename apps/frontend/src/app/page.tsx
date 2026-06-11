@@ -1,4 +1,5 @@
 "use client";
+import { AuthGuard } from "@/components/auth-guard";
 import { NavHeader } from "@/components/nav-header";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -99,6 +100,7 @@ export default function Home() {
   const lowPriority = todos.filter((t) => !t.is_completed && t.priority === "low").length;
 
   return (
+    <AuthGuard>
     <div className="min-h-screen bg-background">
       <NavHeader />
       <main className="container py-6 max-w-5xl mx-auto">
@@ -277,5 +279,6 @@ export default function Home() {
         )}
       </main>
     </div>
+    </AuthGuard>
   );
 }

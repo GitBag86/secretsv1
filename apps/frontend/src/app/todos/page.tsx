@@ -1,4 +1,5 @@
 "use client";
+import { AuthGuard } from "@/components/auth-guard";
 import { useTodos, useTags } from "@/hooks";
 import { NavHeader } from "@/components/nav-header";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -163,6 +164,7 @@ export default function TodosPage() {
   const allCompleted = todos.length > 0 && todos.every((t) => t.is_completed);
 
   return (
+    <AuthGuard>
     <div className="min-h-screen bg-background">
       <NavHeader />
       <main className="container py-6 max-w-3xl mx-auto">
@@ -346,5 +348,6 @@ export default function TodosPage() {
         )}
       </main>
     </div>
+    </AuthGuard>
   );
 }

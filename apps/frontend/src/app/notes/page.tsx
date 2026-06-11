@@ -1,4 +1,5 @@
 "use client";
+import { AuthGuard } from "@/components/auth-guard";
 import { useNotes, useNotebooks, useTags, useNoteTags } from "@/hooks";
 import { NotebookSidebar } from "@/components/notebook-sidebar";
 import { NavHeader } from "@/components/nav-header";
@@ -188,6 +189,7 @@ export default function NotesPage() {
   };
 
   return (
+    <AuthGuard>
     <div className="min-h-screen bg-background">
       <NavHeader />
       <div className="flex" style={{ height: "calc(100vh - 3.5rem)" }}>
@@ -370,5 +372,6 @@ export default function NotesPage() {
         </div>
       )}
     </div>
+    </AuthGuard>
   );
 }

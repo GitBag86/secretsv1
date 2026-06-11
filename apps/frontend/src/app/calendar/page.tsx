@@ -1,4 +1,5 @@
 "use client";
+import { AuthGuard } from "@/components/auth-guard";
 import { useCalendar } from "@/hooks";
 import { NavHeader } from "@/components/nav-header";
 import { useState, useRef, useEffect, useMemo } from "react";
@@ -107,6 +108,7 @@ export default function CalendarPage() {
   const today = () => calendarRef.current?.getApi().today();
 
   return (
+    <AuthGuard>
     <div className="min-h-screen bg-background">
       <NavHeader />
       <main className="container py-6 max-w-6xl mx-auto">
@@ -187,6 +189,7 @@ export default function CalendarPage() {
         )}
       </main>
     </div>
+    </AuthGuard>
   );
 }
 

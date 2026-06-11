@@ -1,4 +1,5 @@
 "use client";
+import { AuthGuard } from "@/components/auth-guard";
 import { NavHeader } from "@/components/nav-header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -45,6 +46,7 @@ export default function TrashPage() {
   const isLoading = notesLoading || todosLoading;
 
   return (
+    <AuthGuard>
     <div className="min-h-screen bg-background">
       <NavHeader />
       <main className="container py-6 max-w-3xl mx-auto">
@@ -158,5 +160,6 @@ export default function TrashPage() {
         )}
       </main>
     </div>
+    </AuthGuard>
   );
 }

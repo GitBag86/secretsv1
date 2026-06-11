@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
@@ -23,8 +23,15 @@ export default function RegisterPage() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { setUser, setUnlocked } = useAuth();
+  const { setUser, setLoggedIn, isLoggedIn, isUnlocked, isHydrated } = useAuth();
   const router = useRouter();
+
+  // Already logged in? Redirect accordingly
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (isLoggedIn && isUnlocked) router.push("/");
+    else if (isLoggedIn && !isUnlocked) router.push("/unlock");
+  }, [isHydrated, isLoggedIn, isUnlocked, router]);
 
   const strength = getStrength(password);
 
@@ -37,8 +44,8 @@ export default function RegisterPage() {
     try {
       const res = await api.auth.register(email, password, name || undefined);
       setUser(res.user);
-      setUnlocked(true);
-      router.push("/");
+      setLoggedIn(true);
+      router.push("/unlock");
     } catch (err: any) {
       setError(typeof err === "string" ? err : "Registration failed");
     } finally {
