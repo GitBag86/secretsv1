@@ -204,7 +204,7 @@ export default function Home() {
                     <div className="space-y-1.5">
                       {[
                         { label: "High", count: stats.highPriority, color: "bg-red-500" },
-                        { label: "Medium", count: stats.activeTodos - stats.highPriority, color: "bg-yellow-500" },
+                        { label: "Medium", count: stats.activeTodos - stats.highPriority - lowPriority, color: "bg-yellow-500" },
                         { label: "Low", count: lowPriority, color: "bg-green-500" },
                         { label: "Completed", count: stats.completedTodos, color: "bg-blue-500" },
                       ].map(({ label, count, color }) => {

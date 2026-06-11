@@ -1,6 +1,7 @@
 "use client";
 import { useAuth } from "@/hooks";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { SearchPalette } from "./search-palette";
 
 export function NavHeader() {
@@ -21,14 +22,14 @@ export function NavHeader() {
       <SearchPalette />
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur">
       <div className="container flex h-14 items-center justify-between">
-        <a href="/" className="flex items-center space-x-2 font-bold">KnowledgeBase</a>
+        <Link href="/" className="flex items-center space-x-2 font-bold">KnowledgeBase</Link>
         {/* Desktop nav */}
         <nav className="hidden sm:flex items-center space-x-6">
-          <a href="/notes" className={`text-sm font-medium ${isActive("/notes") ? "text-primary" : "hover:text-primary"}`}>Notes</a>
-          <a href="/todos" className={`text-sm font-medium ${isActive("/todos") ? "text-primary" : "hover:text-primary"}`}>Todos</a>
-          <a href="/calendar" className={`text-sm font-medium ${isActive("/calendar") ? "text-primary" : "hover:text-primary"}`}>Calendar</a>
-          <a href="/settings" className={`text-sm font-medium ${isActive("/settings") ? "text-primary" : "hover:text-primary"}`}>Settings</a>
-          <a href="/trash" className={`text-sm font-medium ${isActive("/trash") ? "text-primary" : "hover:text-primary"}`}>Trash</a>
+          <Link href="/notes" className={`text-sm font-medium ${isActive("/notes") ? "text-primary" : "hover:text-primary"}`}>Notes</Link>
+          <Link href="/todos" className={`text-sm font-medium ${isActive("/todos") ? "text-primary" : "hover:text-primary"}`}>Todos</Link>
+          <Link href="/calendar" className={`text-sm font-medium ${isActive("/calendar") ? "text-primary" : "hover:text-primary"}`}>Calendar</Link>
+          <Link href="/settings" className={`text-sm font-medium ${isActive("/settings") ? "text-primary" : "hover:text-primary"}`}>Settings</Link>
+          <Link href="/trash" className={`text-sm font-medium ${isActive("/trash") ? "text-primary" : "hover:text-primary"}`}>Trash</Link>
         </nav>
         <div className="flex items-center gap-2">
           {mounted && isUnlocked && (
@@ -56,11 +57,11 @@ export function NavHeader() {
       {/* Mobile nav */}
       {mobileOpen && (
         <div className="sm:hidden border-t bg-background px-4 py-3 space-y-2">
-          <a href="/notes" onClick={() => setMobileOpen(false)} className={`block px-3 py-2 rounded-md text-sm font-medium ${isActive("/notes") ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>Notes</a>
-          <a href="/todos" onClick={() => setMobileOpen(false)} className={`block px-3 py-2 rounded-md text-sm font-medium ${isActive("/todos") ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>Todos</a>
-          <a href="/calendar" onClick={() => setMobileOpen(false)} className={`block px-3 py-2 rounded-md text-sm font-medium ${isActive("/calendar") ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>Calendar</a>
-          <a href="/settings" onClick={() => setMobileOpen(false)} className={`block px-3 py-2 rounded-md text-sm font-medium ${isActive("/settings") ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>Settings</a>
-          <a href="/trash" onClick={() => setMobileOpen(false)} className={`block px-3 py-2 rounded-md text-sm font-medium ${isActive("/trash") ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>Trash</a>
+          <Link href="/notes" onClick={() => setMobileOpen(false)} className={`block px-3 py-2 rounded-md text-sm font-medium ${isActive("/notes") ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>Notes</Link>
+          <Link href="/todos" onClick={() => setMobileOpen(false)} className={`block px-3 py-2 rounded-md text-sm font-medium ${isActive("/todos") ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>Todos</Link>
+          <Link href="/calendar" onClick={() => setMobileOpen(false)} className={`block px-3 py-2 rounded-md text-sm font-medium ${isActive("/calendar") ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>Calendar</Link>
+          <Link href="/settings" onClick={() => setMobileOpen(false)} className={`block px-3 py-2 rounded-md text-sm font-medium ${isActive("/settings") ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>Settings</Link>
+          <Link href="/trash" onClick={() => setMobileOpen(false)} className={`block px-3 py-2 rounded-md text-sm font-medium ${isActive("/trash") ? "bg-primary/10 text-primary" : "hover:bg-accent"}`}>Trash</Link>
         </div>
       )}
     </header>

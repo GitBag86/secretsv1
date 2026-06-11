@@ -4,6 +4,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
+import { useEffect } from "react";
 
 interface RichTextEditorProps {
   content: string;
@@ -25,6 +26,16 @@ export function RichTextEditor({ content, onChange, placeholder = "Write somethi
     editable,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
   });
+
+  // Sync content when prop changes (e.g. selecting a different note)
+  useEffect(() => {
+    if (editor && content && !editor.isDestroyed) {
+      const currentHtml = editor.getHTML();
+      if (currentHtml !== content) {
+        editor.commands.setContent(content, false);
+      }
+    }
+  }, [editor, content]);
 
   if (!editor) return null;
 

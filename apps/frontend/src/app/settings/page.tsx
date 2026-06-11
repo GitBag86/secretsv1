@@ -369,7 +369,7 @@ export default function SettingsPage() {
                     queryClient.invalidateQueries({ queryKey: ["notes"] });
                     queryClient.invalidateQueries({ queryKey: ["todos"] });
                     queryClient.invalidateQueries({ queryKey: ["tags"] });
-                    queryClient.invalidateQueries({ queryKey: ["events"] });
+                    queryClient.invalidateQueries({ queryKey: ["calendar"] });
                     queryClient.invalidateQueries({ queryKey: ["notebooks"] });
                     queryClient.invalidateQueries({ queryKey: ["all-note-tags"] });
                     queryClient.invalidateQueries({ queryKey: ["all-todo-tags"] });
