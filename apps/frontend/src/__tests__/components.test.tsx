@@ -27,12 +27,34 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/hooks", () => ({
   useAuth: () => ({
     user: null,
+    isLoggedIn: true,
     isUnlocked: true,
-    lock: vi.fn(),
+    isHydrated: true,
     sessionElapsed: 0,
     sessionMinutes: 15,
+    setUser: vi.fn(),
+    setLoggedIn: vi.fn(),
+    setUnlocked: vi.fn(),
+    setHydrated: vi.fn(),
     setSessionElapsed: vi.fn(),
     setSessionMinutes: vi.fn(),
+    logout: vi.fn(),
+    lock: vi.fn(),
+    unlock: vi.fn(),
+    setupMasterPassword: vi.fn(),
+    bootstrap: vi.fn(),
+  }),
+  useTags: () => ({
+    tags: [],
+    isLoading: false,
+    create: { mutateAsync: vi.fn(), isPending: false },
+    update: { mutateAsync: vi.fn(), isPending: false },
+    remove: { mutateAsync: vi.fn(), isPending: false },
+  }),
+  useNoteTags: () => ({
+    noteTags: [],
+    isLoading: false,
+    setNoteTags: { mutateAsync: vi.fn(), isPending: false },
   }),
   useNotebooks: () => ({
     notebooks: [],
@@ -111,8 +133,8 @@ describe("Dashboard page", () => {
 
   it("renders stat cards", () => {
     render(createElement(createDashboardWrapper(), null, createElement(Home)));
-    expect(screen.getByText("Notes")).toBeDefined();
-    expect(screen.getByText("Events")).toBeDefined();
+    expect(screen.getAllByText("Notes").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Events").length).toBeGreaterThanOrEqual(1);
     // All stat cards show 0 since we seeded empty data
     expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(3);
   });
