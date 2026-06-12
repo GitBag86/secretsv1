@@ -60,6 +60,7 @@ pub async fn update_tag(pool: State<'_, DbPool>, id: String, name: Option<String
 pub async fn delete_tag(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM note_tags WHERE tag_id = ?1", [&id]).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM todo_tags WHERE tag_id = ?1", [&id]).map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM tags WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;
     Ok(())
 }

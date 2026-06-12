@@ -3,6 +3,7 @@ use crate::database::pool::DbPool;
 
 /// Verify that the database is unlocked and the session has not expired.
 /// If the session has expired, the encryption key is cleared to enforce the lock.
+/// Also verifies the session HMAC to detect DB tampering.
 pub async fn require_valid_session(pool: &DbPool, enc: &EncryptionManager) -> Result<(), String> {
     // First check if the encryption manager is locked
     if enc.is_locked().await {
@@ -19,6 +20,21 @@ pub async fn require_valid_session(pool: &DbPool, enc: &EncryptionManager) -> Re
 
     match unlocked_at_str {
         Ok(unlocked_at_str) => {
+            // Verify HMAC to detect DB tampering
+            let stored_hmac: Result<String, _> = conn.query_row(
+                "SELECT value FROM app_settings WHERE key = 'session_hmac'",
+                [], |r| r.get(0)
+            );
+            if let Ok(hmac) = stored_hmac {
+                if let Ok(false) = enc.verify_session_hmac(&unlocked_at_str, &hmac).await {
+                    // DB tampered — clear session immediately
+                    drop(conn);
+                    enc.clear_key().await;
+                    enc.clear_session_secret().await;
+                    return Err("Session tampered. Please unlock again.".to_string());
+                }
+            }
+
             let unlocked_at: i64 = unlocked_at_str.parse().map_err(|_| "Invalid timestamp".to_string())?;
             let timeout: i64 = conn.query_row(
                 "SELECT COALESCE((SELECT value FROM app_settings WHERE key = 'session_timeout'), '15')",
@@ -30,6 +46,7 @@ pub async fn require_valid_session(pool: &DbPool, enc: &EncryptionManager) -> Re
                 // Session expired — clear the encryption key to enforce the lock
                 drop(conn);
                 enc.clear_key().await;
+                enc.clear_session_secret().await;
                 return Err("Session expired. Please unlock the database again.".to_string());
             }
             Ok(())

@@ -237,11 +237,11 @@ pub async fn import_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     }
     let export: ExportData = serde_json::from_str(&data).map_err(|e| format!("Invalid JSON: {}", e))?;
     let conn = pool.get().await.map_err(|e| e.to_string())?;
+    conn.execute("BEGIN TRANSACTION", []).map_err(|e| e.to_string())?;
     let mut result = ImportResult {
         notes: 0, todos: 0, events: 0, notebooks: 0, tags: 0,
         note_tags: 0, todo_tags: 0, errors: Vec::new(),
     };
-    let now = chrono::Utc::now().timestamp();
 
     // --- Import notebooks ---
     for nb in &export.notebooks {
@@ -333,6 +333,12 @@ pub async fn import_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
         }
     }
 
+    // Commit or rollback based on errors
+    if result.errors.is_empty() {
+        conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
+    } else {
+        conn.execute("ROLLBACK", []).map_err(|e| e.to_string())?;
+    }
     drop(conn);
     Ok(result)
 }

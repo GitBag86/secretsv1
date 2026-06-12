@@ -35,8 +35,9 @@ impl SupabaseClient {
             .map_err(|e| format!("HTTP request failed: {}", e))?;
 
         if !resp.status().is_success() {
+            let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("Supabase push failed ({}): {}", resp.status(), body));
+            return Err(format!("Supabase push failed ({}): {}", status, body));
         }
         Ok(())
     }
@@ -53,8 +54,9 @@ impl SupabaseClient {
             .map_err(|e| format!("HTTP request failed: {}", e))?;
 
         if !resp.status().is_success() && resp.status().as_u16() != 404 {
+            let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("Supabase delete failed ({}): {}", resp.status(), body));
+            return Err(format!("Supabase delete failed ({}): {}", status, body));
         }
         Ok(())
     }
@@ -74,8 +76,9 @@ impl SupabaseClient {
             .map_err(|e| format!("HTTP request failed: {}", e))?;
 
         if !resp.status().is_success() {
+            let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("Supabase pull failed ({}): {}", resp.status(), body));
+            return Err(format!("Supabase pull failed ({}): {}", status, body));
         }
 
         let data: Vec<Value> = resp.json().await.map_err(|e| format!("Failed to parse response: {}", e))?;

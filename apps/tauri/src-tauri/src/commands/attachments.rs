@@ -125,7 +125,7 @@ pub async fn list_note_attachments(pool: State<'_, DbPool>, note_id: String) -> 
 
 #[tauri::command]
 pub async fn delete_attachment(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     pool: State<'_, DbPool>,
     id: String,
 ) -> Result<(), String> {
@@ -191,7 +191,7 @@ pub async fn open_attachment(
         .map_err(|e| format!("Failed to write temp file: {}", e))?;
 
     app.shell()
-        .open_path(&temp_path.to_string_lossy(), None)
+        .open(temp_path.to_string_lossy().to_string(), None)
         .map_err(|e| format!("Failed to open file: {}", e))?;
 
     Ok(())

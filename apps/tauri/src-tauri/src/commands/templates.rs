@@ -4,7 +4,7 @@ use crate::crypto::manager::EncryptionManager;
 use crate::sync::enqueue_sync;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Template {
     pub id: String,
     pub user_id: String,

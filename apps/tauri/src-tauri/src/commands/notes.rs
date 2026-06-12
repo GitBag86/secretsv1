@@ -110,6 +110,7 @@ pub async fn update_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 #[tauri::command]
 pub async fn delete_note(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM note_tags WHERE note_id = ?1", [&id]).ok();
     conn.execute("DELETE FROM notes WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;
     enqueue_sync(&conn, "note", &id, "delete", None).ok();
     drop(conn);

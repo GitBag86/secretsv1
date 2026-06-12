@@ -18,7 +18,7 @@ pub fn derive_key_argon2id(password: &str, salt: &[u8]) -> Result<([u8; 32], Str
     // m=65536 (64 MB), t=3 iterations, p=4 parallelism, output=32 bytes
     let params = Params::new(65_536, 3, 4, Some(32))
         .map_err(|e| format!("Argon2 params error: {}", e))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::Version0x13, params);
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
     let mut key = [0u8; 32];
     argon2

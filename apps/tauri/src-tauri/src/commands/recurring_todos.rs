@@ -85,27 +85,29 @@ pub async fn remove_recurrence(pool: State<'_, DbPool>, todo_id: String) -> Resu
 #[tauri::command]
 pub async fn list_recurring_todos(pool: State<'_, DbPool>) -> Result<Vec<RecurringTodo>, String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
-    let mut stmt = conn
-        .prepare("SELECT id, todo_id, recurrence_rule, next_due_date, created_at FROM recurring_todos")
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], |r| {
-            Ok(RecurringTodo {
-                id: r.get(0)?,
-                todo_id: r.get(1)?,
-                recurrence_rule: r.get(2)?,
-                next_due_date: r.get(3)?,
-                created_at: r.get(4)?,
+    let result = {
+        let mut stmt = conn
+            .prepare("SELECT id, todo_id, recurrence_rule, next_due_date, created_at FROM recurring_todos")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(RecurringTodo {
+                    id: r.get(0)?,
+                    todo_id: r.get(1)?,
+                    recurrence_rule: r.get(2)?,
+                    next_due_date: r.get(3)?,
+                    created_at: r.get(4)?,
+                })
             })
-        })
-        .map_err(|e| e.to_string())?;
-    let mut result = Vec::new();
-    for row in rows {
-        if let Ok(rt) = row {
-            result.push(rt);
+            .map_err(|e| e.to_string())?;
+        let mut result = Vec::new();
+        for row in rows {
+            if let Ok(rt) = row {
+                result.push(rt);
+            }
         }
-    }
-    drop(conn);
+        result
+    }; // stmt dropped here
     Ok(result)
 }
 

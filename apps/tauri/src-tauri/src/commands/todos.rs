@@ -52,7 +52,6 @@ pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     }
     let id = uuid::Uuid::new_v4().to_string();
     let user_id = "local-user".to_string();
-    let p = priority.unwrap_or_else(|| "medium".into());
     let et = enc.encrypt_or_pass(&title).await.map_err(|e| e.to_string())?;
     let ed = if let Some(ref d) = description { Some(enc.encrypt_or_pass(d).await.map_err(|e| e.to_string())?) } else { None };
     let now = chrono::Utc::now().timestamp();
@@ -117,6 +116,8 @@ pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 #[tauri::command]
 pub async fn delete_todo(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM todo_tags WHERE todo_id = ?1", [&id]).ok();
+    conn.execute("DELETE FROM recurring_todos WHERE todo_id = ?1", [&id]).ok();
     conn.execute("DELETE FROM todos WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;
     enqueue_sync(&conn, "todo", &id, "delete", None).ok();
     drop(conn);
@@ -138,6 +139,8 @@ pub async fn bulk_update_todos(pool: State<'_, DbPool>, ids: Vec<String>, is_com
 pub async fn bulk_delete_todos(pool: State<'_, DbPool>, ids: Vec<String>) -> Result<(), String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     for id in &ids {
+        conn.execute("DELETE FROM todo_tags WHERE todo_id = ?1", [id]).ok();
+        conn.execute("DELETE FROM recurring_todos WHERE todo_id = ?1", [id]).ok();
         conn.execute("DELETE FROM todos WHERE id = ?1", [id]).map_err(|e| e.to_string())?;
     }
     drop(conn);

@@ -145,7 +145,7 @@ export default function SettingsPage() {
   };
 
   const handleRotate = async () => {
-    if (!curPw || !newPw || newPw.length < 4) return;
+    if (!curPw || !newPw || newPw.length < 8) return;
     setRotating(true);
     setRotateResult(null);
     try {
@@ -227,8 +227,8 @@ export default function SettingsPage() {
               {showRotate && (
                 <div className="space-y-2 border rounded-md p-3 bg-muted/30">
                   <input type="password" value={curPw} onChange={(e) => setCurPw(e.target.value)} placeholder="Current password" className="w-full p-2 border rounded-md bg-background text-sm" />
-                  <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="New password (min 4 chars)" className="w-full p-2 border rounded-md bg-background text-sm" />
-                  <button onClick={handleRotate} disabled={rotating || !curPw || newPw.length < 4} className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
+                  <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="New password (min 8 chars)" className="w-full p-2 border rounded-md bg-background text-sm" />
+                  <button onClick={handleRotate} disabled={rotating || !curPw || newPw.length < 8} className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
                     {rotating ? "Rotating..." : "Rotate Key"}
                   </button>
                 </div>

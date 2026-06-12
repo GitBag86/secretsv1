@@ -29,18 +29,20 @@ pub async fn restore_note(pool: State<'_, DbPool>, id: String) -> Result<(), Str
 #[tauri::command]
 pub async fn list_archived_notes(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<Vec<crate::commands::notes::Note>, String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
-    let mut stmt = conn.prepare("SELECT id, user_id, notebook_id, title, content, word_count, reading_time, is_pinned, is_archived, created_at, updated_at FROM notes WHERE is_archived = 1 ORDER BY updated_at DESC").map_err(|e| e.to_string())?;
-    let mut notes = Vec::new();
-    let rows = stmt.query_map([], |r| {
-        Ok(crate::commands::notes::Note {
-            id: r.get(0)?, user_id: r.get(1)?, notebook_id: r.get(2)?,
-            title: r.get(3)?, content: r.get(4)?, word_count: r.get(5)?,
-            reading_time: r.get(6)?, is_pinned: r.get::<_, i64>(7)? != 0,
-            is_archived: true, created_at: r.get(9)?, updated_at: r.get(10)?,
-        })
-    }).map_err(|e| e.to_string())?;
-    for row in rows { if let Ok(n) = row { notes.push(n); } }
-    drop(conn);
+    let mut notes = {
+        let mut stmt = conn.prepare("SELECT id, user_id, notebook_id, title, content, word_count, reading_time, is_pinned, is_archived, created_at, updated_at FROM notes WHERE is_archived = 1 ORDER BY updated_at DESC").map_err(|e| e.to_string())?;
+        let mut notes = Vec::new();
+        let rows = stmt.query_map([], |r| {
+            Ok(crate::commands::notes::Note {
+                id: r.get(0)?, user_id: r.get(1)?, notebook_id: r.get(2)?,
+                title: r.get(3)?, content: r.get(4)?, word_count: r.get(5)?,
+                reading_time: r.get(6)?, is_pinned: r.get::<_, i64>(7)? != 0,
+                is_archived: true, created_at: r.get(9)?, updated_at: r.get(10)?,
+            })
+        }).map_err(|e| e.to_string())?;
+        for row in rows { if let Ok(n) = row { notes.push(n); } }
+        notes
+    }; // stmt dropped here, conn no longer borrowed
     crate::commands::notes::decrypt_notes(&enc, &mut notes).await;
     Ok(notes)
 }
@@ -48,6 +50,21 @@ pub async fn list_archived_notes(pool: State<'_, DbPool>, enc: State<'_, Encrypt
 #[tauri::command]
 pub async fn permanently_delete_note(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
+    // Delete attachment files from disk before removing DB records
+    let paths: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT storage_path FROM attachments WHERE note_id = ?1")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([&id], |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        let mut out = Vec::new();
+        for row in rows { if let Ok(p) = row { out.push(p); } }
+        out
+    };
+    for path in &paths {
+        let p = std::path::Path::new(path);
+        if p.exists() { std::fs::remove_file(p).ok(); }
+    }
+    conn.execute("DELETE FROM attachments WHERE note_id = ?1", [&id]).ok();
     conn.execute("DELETE FROM notes WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM note_tags WHERE note_id = ?1", [&id]).ok();
     drop(conn);
@@ -77,17 +94,19 @@ pub async fn restore_todo(pool: State<'_, DbPool>, id: String) -> Result<(), Str
 #[tauri::command]
 pub async fn list_archived_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<Vec<crate::commands::todos::Todo>, String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
-    let mut stmt = conn.prepare("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos WHERE is_archived = 1 ORDER BY updated_at DESC").map_err(|e| e.to_string())?;
-    let mut todos = Vec::new();
-    let rows = stmt.query_map([], |r| {
-        Ok(crate::commands::todos::Todo {
-            id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?,
-            description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0,
-            priority: r.get(5)?, due_date: r.get(6)?, created_at: r.get(7)?, updated_at: r.get(8)?,
-        })
-    }).map_err(|e| e.to_string())?;
-    for row in rows { if let Ok(t) = row { todos.push(t); } }
-    drop(conn);
+    let mut todos = {
+        let mut stmt = conn.prepare("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos WHERE is_archived = 1 ORDER BY updated_at DESC").map_err(|e| e.to_string())?;
+        let mut todos = Vec::new();
+        let rows = stmt.query_map([], |r| {
+            Ok(crate::commands::todos::Todo {
+                id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?,
+                description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0,
+                priority: r.get(5)?, due_date: r.get(6)?, created_at: r.get(7)?, updated_at: r.get(8)?,
+            })
+        }).map_err(|e| e.to_string())?;
+        for row in rows { if let Ok(t) = row { todos.push(t); } }
+        todos
+    }; // stmt dropped here
     for t in &mut todos {
         helpers::decrypt_todo(&enc, t).await;
     }
@@ -99,6 +118,7 @@ pub async fn permanently_delete_todo(pool: State<'_, DbPool>, id: String) -> Res
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM todos WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM todo_tags WHERE todo_id = ?1", [&id]).ok();
+    conn.execute("DELETE FROM recurring_todos WHERE todo_id = ?1", [&id]).ok();
     drop(conn);
     Ok(())
 }

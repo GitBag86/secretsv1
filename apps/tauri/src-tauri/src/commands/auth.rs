@@ -74,24 +74,50 @@ pub async fn unlock_database(pool: State<'_, DbPool>, enc: State<'_, EncryptionM
     let salt_hex: String = conn.query_row("SELECT value FROM app_settings WHERE key = 'encryption_salt'", [], |r| r.get(0)).map_err(|_| "No encryption salt found".to_string())?;
     enc.set_key_from_stored_salt(&password, &salt_hex).await.map_err(|e| format!("Key derivation failed: {}", e))?;
     let now = chrono::Utc::now().timestamp();
+    // Generate session HMAC to detect DB tampering of session_unlocked_at
+    let _session_secret = enc.set_session_secret().await;
+    let session_hmac = enc.compute_session_hmac(&now.to_string()).await.map_err(|e| e.to_string())?;
     conn.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('session_unlocked_at', ?1, ?2)", (now.to_string(), now)).map_err(|e| e.to_string())?;
+    conn.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('session_hmac', ?1, ?2)", (&session_hmac, now)).map_err(|e| e.to_string())?;
     Ok(serde_json::json!({ "success": true }))
 }
 
 #[tauri::command]
 pub async fn lock_database(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<(), String> {
     enc.clear_key().await;
+    enc.clear_session_secret().await;
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM app_settings WHERE key = 'session_unlocked_at'", []).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM app_settings WHERE key = 'session_hmac'", []).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn check_session(pool: State<'_, DbPool>) -> Result<serde_json::Value, String> {
+pub async fn check_session(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<serde_json::Value, String> {
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     let result: Result<String, _> = conn.query_row("SELECT value FROM app_settings WHERE key = 'session_unlocked_at'", [], |r| r.get(0));
     match result {
         Ok(unlocked_at_str) => {
+            // Verify HMAC to detect DB tampering
+            let stored_hmac: Result<String, _> = conn.query_row(
+                "SELECT value FROM app_settings WHERE key = 'session_hmac'", [], |r| r.get(0)
+            );
+            if let Ok(hmac) = stored_hmac {
+                match enc.verify_session_hmac(&unlocked_at_str, &hmac).await {
+                    Ok(true) => {} // HMAC valid
+                    Ok(false) => {
+                        // DB tampered — clear session
+                        enc.clear_session_secret().await;
+                        let _ = conn.execute("DELETE FROM app_settings WHERE key = 'session_unlocked_at'", []);
+                        let _ = conn.execute("DELETE FROM app_settings WHERE key = 'session_hmac'", []);
+                        return Ok(serde_json::json!({ "valid": false }));
+                    }
+                    Err(_) => {
+                        // No session secret in memory (locked) — can't verify, but check raw timestamp
+                        // This happens on app restart when DB has session but memory is empty
+                    }
+                }
+            }
             let unlocked_at: i64 = unlocked_at_str.parse().map_err(|_| "Invalid timestamp".to_string())?;
             let timeout: i64 = conn.query_row(
                 "SELECT COALESCE((SELECT value FROM app_settings WHERE key = 'session_timeout'), '15')", [], |r| r.get::<_, String>(0)
@@ -121,10 +147,12 @@ pub async fn set_session_timeout(pool: State<'_, DbPool>, minutes: i64) -> Resul
 }
 
 #[tauri::command]
-pub async fn refresh_session(pool: State<'_, DbPool>) -> Result<serde_json::Value, String> {
+pub async fn refresh_session(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<serde_json::Value, String> {
     let now = chrono::Utc::now().timestamp();
     let conn = pool.get().await.map_err(|e| e.to_string())?;
+    let session_hmac = enc.compute_session_hmac(&now.to_string()).await.map_err(|e| e.to_string())?;
     conn.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('session_unlocked_at', ?1, ?2)", (now.to_string(), now)).map_err(|e| e.to_string())?;
+    conn.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('session_hmac', ?1, ?2)", (&session_hmac, now)).map_err(|e| e.to_string())?;
     Ok(serde_json::json!({ "refreshed_at": now }))
 }
 
