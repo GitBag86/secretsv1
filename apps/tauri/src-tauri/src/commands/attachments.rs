@@ -1,6 +1,6 @@
 use tauri::State;
 use tauri::Manager;
-use tauri_plugin_shell::ShellExt;
+use tauri_plugin_opener::OpenerExt;
 use base64::Engine;
 use crate::database::pool::DbPool;
 use crate::crypto::manager::EncryptionManager;
@@ -190,8 +190,8 @@ pub async fn open_attachment(
     std::fs::write(&temp_path, &data)
         .map_err(|e| format!("Failed to write temp file: {}", e))?;
 
-    app.shell()
-        .open(temp_path.to_string_lossy().to_string(), None)
+    app.opener()
+        .open_path(temp_path.to_string_lossy().to_string(), None::<&str>)
         .map_err(|e| format!("Failed to open file: {}", e))?;
 
     Ok(())
