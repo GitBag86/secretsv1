@@ -32,7 +32,9 @@ pub async fn decrypt_notes(enc: &EncryptionManager, notes: &mut [Note]) {
 
 #[tauri::command]
 pub async fn list_notes(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<Vec<Note>, String> {
-    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    log::info!("[list_notes] acquiring pool lock...");
+    let conn = pool.get().await.map_err(|e| { log::error!("[list_notes] pool.get failed: {}", e); e.to_string() })?;
+    log::info!("[list_notes] pool lock acquired, querying...");
     let mut notes = {
         let mut stmt = conn.prepare("SELECT id, user_id, notebook_id, title, content, word_count, reading_time, is_pinned, is_archived, created_at, updated_at FROM notes WHERE is_archived = 0 ORDER BY is_pinned DESC, updated_at DESC").map_err(|e| e.to_string())?;
         let mut result = Vec::new();
@@ -43,7 +45,9 @@ pub async fn list_notes(pool: State<'_, DbPool>, enc: State<'_, EncryptionManage
         result
     };
     drop(conn);
+    log::info!("[list_notes] lock released, decrypting {} notes...", notes.len());
     decrypt_notes(&enc, &mut notes).await;
+    log::info!("[list_notes] done");
     Ok(notes)
 }
 

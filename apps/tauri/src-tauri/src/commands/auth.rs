@@ -85,7 +85,7 @@ pub async fn register(pool: State<'_, DbPool>, email: String, password: String, 
         if n.len() > 100 { return Err("Name too long (max 100 chars)".into()); }
         if n.chars().any(|c| c.is_control()) { return Err("Name contains invalid characters".into()); }
     }
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = "local-user".to_string();
     let password_hash = crypto::argon2::hash_password(&password).map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().timestamp();
     let conn = pool.get().await.map_err(|e| e.to_string())?;

@@ -7,25 +7,33 @@ pub struct Notebook { pub id: String, pub user_id: String, pub name: String, pub
 
 #[tauri::command]
 pub async fn list_notebooks(pool: State<'_, DbPool>) -> Result<Vec<Notebook>, String> {
-    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    log::info!("[list_notebooks] acquiring pool lock...");
+    let conn = pool.get().await.map_err(|e| { log::error!("[list_notebooks] pool.get failed: {}", e); e.to_string() })?;
+    log::info!("[list_notebooks] pool lock acquired");
     let mut stmt = conn.prepare("SELECT id, user_id, name, color, sort_order, created_at, updated_at FROM notebooks ORDER BY sort_order ASC, name ASC").map_err(|e| e.to_string())?;
     let mut notebooks = Vec::new();
     let rows = stmt.query_map([], |r| {
         Ok(Notebook { id: r.get(0)?, user_id: r.get(1)?, name: r.get(2)?, color: r.get(3)?, sort_order: r.get(4)?, created_at: r.get(5)?, updated_at: r.get(6)? })
     }).map_err(|e| e.to_string())?;
     for row in rows { if let Ok(n) = row { notebooks.push(n); } }
+    log::info!("[list_notebooks] done, {} notebooks", notebooks.len());
     Ok(notebooks)
 }
 
 #[tauri::command]
 pub async fn create_notebook(pool: State<'_, DbPool>, name: String, color: Option<String>) -> Result<Notebook, String> {
+    log::info!("[create_notebook] called name={} color={:?}", name, color);
     let id = uuid::Uuid::new_v4().to_string();
     let user_id = "local-user".to_string();
     let c = color.unwrap_or_else(|| "#3b82f6".into());
     let now = chrono::Utc::now().timestamp();
-    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    log::info!("[create_notebook] acquiring pool lock...");
+    let conn = pool.get().await.map_err(|e| { log::error!("[create_notebook] pool.get failed: {}", e); e.to_string() })?;
+    log::info!("[create_notebook] pool lock acquired, querying...");
     let max_order: i64 = conn.query_row("SELECT COALESCE(MAX(sort_order), -1) FROM notebooks WHERE user_id = ?1", [&user_id], |r| r.get(0)).unwrap_or(0);
-    conn.execute("INSERT INTO notebooks (id, user_id, name, color, sort_order, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7)", (&id, &user_id, &name, &c, max_order + 1, now, now)).map_err(|e| e.to_string())?;
+    log::info!("[create_notebook] max_order={}, inserting...", max_order);
+    conn.execute("INSERT INTO notebooks (id, user_id, name, color, sort_order, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7)", (&id, &user_id, &name, &c, max_order + 1, now, now)).map_err(|e| { log::error!("[create_notebook] insert failed: {}", e); e.to_string() })?;
+    log::info!("[create_notebook] inserted successfully, returning");
     Ok(Notebook { id, user_id, name, color: c, sort_order: max_order + 1, created_at: now, updated_at: now })
 }
 

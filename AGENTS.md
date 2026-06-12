@@ -5,8 +5,8 @@ Local-first, encrypted personal knowledge base desktop app with notes, todos, an
 
 ## Architecture
 - **Monorepo** (pnpm + turborepo): `apps/frontend` (Next.js 14 SSG), `apps/tauri/src-tauri` (Rust backend)
-- **DB**: SQLite via rusqlite (bundled), WAL mode, 19 migrations in `apps/tauri/src-tauri/migrations/`
-- **Encryption**: AES-256-GCM client-side, Argon2id password hashing, Argon2id key derivation (with legacy SHA-256 backward compat). Content stored with `$enc$` prefix + hex(nonce||ciphertext). Backward-compatible with plaintext.
+- **DB**: SQLite via rusqlite (bundled), WAL mode, 20 migrations in `apps/tauri/src-tauri/migrations/`
+- **Encryption**: AES-256-GCM client-side, Argon2id password hashing, Argon2id key derivation (with legacy SHA-256 backward compat). Content stored with `$enc$` prefix + hex(nonce||ciphertext). Backward-compatible with plaintext. Session HMAC-SHA256 detects DB tampering.
 - **State**: React Query for server cache, Zustand for client state (auth, undo stack)
 - **IPC**: Frontend → Tauri `invoke()` → Rust commands. All DB access through `DbPool` (Arc<Mutex<Connection>>).
 
@@ -31,6 +31,7 @@ Local-first, encrypted personal knowledge base desktop app with notes, todos, an
 - `user_id` is hardcoded to `"local-user"` everywhere — multi-user not implemented
 - Template content is stored **unencrypted** (only note/todo/event content is encrypted)
 - Attachments stored on disk **encrypted** using AES-256-GCM via `encrypt_raw`/`decrypt_raw`
+- Auth endpoints (register/login/unlock) use in-memory rate limiting (5 attempts / 15 min window per email)
 
 ## Security Issues (Fixed)
 1. **SHA-256 for key derivation** — FIXED: Now uses Argon2id (OWASP params: m=64MB, t=3, p=4) with backward-compatible SHA-256 fallback for legacy data. Salt versioned with "argon2id:" prefix.
@@ -38,8 +39,8 @@ Local-first, encrypted personal knowledge base desktop app with notes, todos, an
 3. **Attachments unencrypted** — FIXED: Files encrypted at rest using AES-256-GCM via `encrypt_raw`/`decrypt_raw`. DB `encrypted` flag set correctly.
 4. **Supabase key in plaintext** — FIXED: API key encrypted at rest via `encrypt_or_pass` when stored, decrypted via `try_decrypt` when used.
 5. **Key rotation atomicity** — FIXED: Transaction ROLLBACK on any failure preserves old key + salt. No partial re-encryption.
-6. **Session timeout DB manipulation** — Still an issue (low priority — local-only attack vector).
-7. **No rate limiting on auth** — Still an issue (low priority — local desktop app).
+6. **Session timeout DB manipulation** — FIXED: HMAC-SHA256 on `session_unlocked_at` timestamps. Session secret stored in memory only (never persisted). Tampered timestamps detected via `require_valid_session` and `check_session`.
+7. **No rate limiting on auth** — FIXED: In-memory rate limiter tracks failed login/unlock attempts per email (5 attempts per 15-minute window). Successful auth resets counter.
 
 ## Rust Backend Structure
 ```
@@ -123,7 +124,7 @@ apps/frontend/src/
 - **Known issue**: `components.test.tsx` fails to load due to OXC parser bug with deep JSX nesting (pre-existing, not caused by code changes)
 
 ## Migration System
-19 SQL files in `apps/tauri/src-tauri/migrations/`, applied sequentially on startup via `pool.rs`. Idempotent (ignores "duplicate column" errors). New migrations should be added with sequential numbering (020_*, 021_*, etc.).
+20 SQL files in `apps/tauri/src-tauri/migrations/`, applied sequentially on startup via `pool.rs`. Idempotent (ignores "duplicate column" errors). New migrations should be added with sequential numbering (021_*, 022_*, etc.).
 
 ## Environment
 - Node.js 18+ required
