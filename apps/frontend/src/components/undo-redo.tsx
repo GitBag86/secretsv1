@@ -32,8 +32,13 @@ export function UndoRedo() {
         if (entry.type === "todo") await api.todos.update(entry.id, entry.before!);
         else if (entry.type === "note") await api.notes.update(entry.id, entry.before!);
       } else if (entry.action === "delete") {
-        if (entry.type === "todo") await api.todos.create(entry.before!);
-        else if (entry.type === "note") await api.notes.create(entry.before!);
+        if (entry.type === "todo") {
+          const { id, title, description, priority, due_date, is_completed } = entry.before! as any;
+          await api.todos.create({ id, title, description, priority, due_date, is_completed });
+        } else if (entry.type === "note") {
+          const { id, title, content, notebook_id } = entry.before! as any;
+          await api.notes.create({ id, title, content, notebook_id });
+        }
       }
       setMsg(`Undo: ${entry.label}`);
       setTimeout(() => setMsg(null), 2000);
@@ -45,8 +50,13 @@ export function UndoRedo() {
     if (!entry) return;
     try {
       if (entry.action === "create") {
-        if (entry.type === "todo") await api.todos.create(entry.after!);
-        else if (entry.type === "note") await api.notes.create(entry.after!);
+        if (entry.type === "todo") {
+          const { id, title, description, priority, due_date, is_completed } = entry.after! as any;
+          await api.todos.create({ id, title, description, priority, due_date, is_completed });
+        } else if (entry.type === "note") {
+          const { id, title, content, notebook_id } = entry.after! as any;
+          await api.notes.create({ id, title, content, notebook_id });
+        }
       } else if (entry.action === "update") {
         if (entry.type === "todo") await api.todos.update(entry.id, entry.after!);
         else if (entry.type === "note") await api.notes.update(entry.id, entry.after!);

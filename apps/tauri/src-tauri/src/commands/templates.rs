@@ -27,7 +27,8 @@ pub async fn list_templates(pool: State<'_, DbPool>) -> Result<Vec<Template>, St
 }
 
 #[tauri::command]
-pub async fn create_template(pool: State<'_, DbPool>, name: String, content: String) -> Result<Template, String> {
+pub async fn create_template(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, name: String, content: String) -> Result<Template, String> {
+    crate::commands::helpers::require_valid_session(&pool, &enc).await?;
     let id = uuid::Uuid::new_v4().to_string();
     let user_id = "local-user".to_string();
     let now = chrono::Utc::now().timestamp();

@@ -50,12 +50,11 @@ pub async fn attach_file(
 
     let original_size = decoded.len() as i64;
 
-    // Encrypt file data at rest if the database is unlocked
+    // Encrypt file data at rest
     let (stored_data, is_encrypted) = if !enc.is_locked().await {
-        match enc.encrypt_raw(&decoded).await {
-            Ok(enc_data) => (enc_data, true),
-            Err(_) => (decoded.clone(), false), // Fall back to unencrypted on error
-        }
+        let enc_data = enc.encrypt_raw(&decoded).await
+            .map_err(|e| format!("Failed to encrypt attachment: {}", e))?;
+        (enc_data, true)
     } else {
         (decoded.clone(), false)
     };

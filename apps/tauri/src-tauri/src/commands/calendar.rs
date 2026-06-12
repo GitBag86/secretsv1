@@ -90,7 +90,8 @@ pub async fn update_calendar_event(pool: State<'_, DbPool>, enc: State<'_, Encry
 }
 
 #[tauri::command]
-pub async fn delete_calendar_event(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
+pub async fn delete_calendar_event(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String) -> Result<(), String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM calendar_events WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;
     enqueue_sync(&conn, "event", &id, "delete", None).ok();

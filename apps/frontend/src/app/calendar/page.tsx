@@ -8,7 +8,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import rrulePlugin from "@fullcalendar/rrule";
-import type { EventClickArg, DateSelectArg } from "@fullcalendar/core";
+import type { EventClickArg, DateSelectArg, EventDropArg } from "@fullcalendar/core";
 
 export default function CalendarPage() {
   const { events, isLoading, create, update, remove } = useCalendar();
@@ -99,10 +99,15 @@ export default function CalendarPage() {
     });
   };
 
-  const handleEventDrop = async (info: any) => {
+  const handleEventDrop = async (info: EventDropArg) => {
     const startSec = Math.floor(info.event.start!.getTime() / 1000);
     const endSec = Math.floor(info.event.end!.getTime() / 1000);
-    await update.mutateAsync({ id: info.event.id, start_time: startSec, end_time: endSec });
+    try {
+      await update.mutateAsync({ id: info.event.id, start_time: startSec, end_time: endSec });
+    } catch {
+      // Revert the drop on failure
+      info.revert();
+    }
   };
 
   const today = () => calendarRef.current?.getApi().today();

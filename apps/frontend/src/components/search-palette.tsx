@@ -70,6 +70,7 @@ export function SearchPalette() {
   }, [router]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (results.length === 0) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setSelectedIndex((i) => Math.min(i + 1, results.length - 1));

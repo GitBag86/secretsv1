@@ -63,11 +63,11 @@ pub async fn get_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>
 }
 
 #[tauri::command]
-pub async fn create_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, content: String, notebook_id: Option<String>) -> Result<Note, String> {
+pub async fn create_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, content: String, notebook_id: Option<String>, id: Option<String>) -> Result<Note, String> {
     helpers::require_valid_session(&pool, &enc).await?;
     validate_title(&title)?;
     validate_content(&content)?;
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let user_id = "local-user".to_string();
     let et = enc.encrypt_or_pass(&title).await.map_err(|e| e.to_string())?;
     let ec = enc.encrypt_or_pass(&content).await.map_err(|e| e.to_string())?;
@@ -115,7 +115,8 @@ pub async fn update_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 }
 
 #[tauri::command]
-pub async fn delete_note(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
+pub async fn delete_note(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String) -> Result<(), String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM note_tags WHERE note_id = ?1", [&id]).ok();
     conn.execute("DELETE FROM notes WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;

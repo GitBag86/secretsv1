@@ -161,7 +161,7 @@ export default function NotesPage() {
 
   const handleCreate = async () => {
     if (!title.trim()) return;
-    await create.mutateAsync({ title, content });
+    await create.mutateAsync({ title, content, notebook_id: activeNotebook ?? undefined });
     setTitle("");
     setContent("");
     setShowForm(false);

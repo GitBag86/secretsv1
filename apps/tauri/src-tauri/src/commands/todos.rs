@@ -41,7 +41,7 @@ pub async fn list_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManage
 }
 
 #[tauri::command]
-pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, description: Option<String>, priority: Option<String>, due_date: Option<i64>) -> Result<Todo, String> {
+pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, description: Option<String>, priority: Option<String>, due_date: Option<i64>, id: Option<String>, is_completed: Option<bool>) -> Result<Todo, String> {
     helpers::require_valid_session(&pool, &enc).await?;
     validate_todo_title(&title)?;
     if let Some(ref d) = description { validate_todo_description(d)?; }
@@ -50,17 +50,18 @@ pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     if !valid_priorities.contains(&p.as_str()) {
         return Err(format!("Invalid priority '{}'. Must be one of: {:?}", p, valid_priorities));
     }
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let user_id = "local-user".to_string();
     let et = enc.encrypt_or_pass(&title).await.map_err(|e| e.to_string())?;
     let ed = if let Some(ref d) = description { Some(enc.encrypt_or_pass(d).await.map_err(|e| e.to_string())?) } else { None };
     let now = chrono::Utc::now().timestamp();
     let conn = pool.get().await.map_err(|e| e.to_string())?;
-    conn.execute("INSERT INTO todos (id, user_id, title, description, priority, due_date, is_archived, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,0,?7,?8)", (&id, &user_id, &et, &ed, &p, &due_date, now, now)).map_err(|e| e.to_string())?;
-    let payload = serde_json::json!({"id": &id, "title": &et, "description": &ed, "priority": &p, "due_date": &due_date, "is_completed": false, "created_at": now, "updated_at": now});
+    let ic = is_completed.unwrap_or(false);
+    conn.execute("INSERT INTO todos (id, user_id, title, description, is_completed, priority, due_date, is_archived, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,0,?8,?9)", (&id, &user_id, &et, &ed, ic as i64, &p, &due_date, now, now)).map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({"id": &id, "title": &et, "description": &ed, "is_completed": ic, "priority": &p, "due_date": &due_date, "created_at": now, "updated_at": now});
     enqueue_sync(&conn, "todo", &id, "create", Some(&payload.to_string())).ok();
     drop(conn);
-    Ok(Todo { id, user_id, title, description, is_completed: false, priority: p, due_date, created_at: now, updated_at: now })
+    Ok(Todo { id, user_id, title, description, is_completed: ic, priority: p, due_date, created_at: now, updated_at: now })
 }
 
 #[tauri::command]
@@ -114,7 +115,8 @@ pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
 }
 
 #[tauri::command]
-pub async fn delete_todo(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
+pub async fn delete_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String) -> Result<(), String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM todo_tags WHERE todo_id = ?1", [&id]).ok();
     conn.execute("DELETE FROM recurring_todos WHERE todo_id = ?1", [&id]).ok();
@@ -125,7 +127,8 @@ pub async fn delete_todo(pool: State<'_, DbPool>, id: String) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub async fn bulk_update_todos(pool: State<'_, DbPool>, ids: Vec<String>, is_completed: bool) -> Result<(), String> {
+pub async fn bulk_update_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, ids: Vec<String>, is_completed: bool) -> Result<(), String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().timestamp();
     for id in &ids {
@@ -136,7 +139,8 @@ pub async fn bulk_update_todos(pool: State<'_, DbPool>, ids: Vec<String>, is_com
 }
 
 #[tauri::command]
-pub async fn bulk_delete_todos(pool: State<'_, DbPool>, ids: Vec<String>) -> Result<(), String> {
+pub async fn bulk_delete_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, ids: Vec<String>) -> Result<(), String> {
+    helpers::require_valid_session(&pool, &enc).await?;
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     for id in &ids {
         conn.execute("DELETE FROM todo_tags WHERE todo_id = ?1", [id]).ok();

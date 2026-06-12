@@ -112,7 +112,18 @@ pub async fn list_recurring_todos(pool: State<'_, DbPool>) -> Result<Vec<Recurri
 }
 
 /// Advance a recurring todo: update its due_date to the next occurrence and mark incomplete.
+/// Returns error if the todo is archived (should not advance archived recurring todos).
 pub fn advance_recurring_todo(conn: &rusqlite::Connection, todo_id: &str) -> Result<(), String> {
+    // Check if the todo is archived — skip advancement for archived items
+    let is_archived: bool = conn.query_row(
+        "SELECT is_archived FROM todos WHERE id = ?1",
+        [todo_id],
+        |r| r.get::<_, i64>(0),
+    ).map(|v| v != 0).unwrap_or(false);
+    if is_archived {
+        return Err("Todo is archived, not advancing recurrence".to_string());
+    }
+
     let rt = conn.query_row(
         "SELECT recurrence_rule, next_due_date FROM recurring_todos WHERE todo_id = ?1",
         [todo_id],

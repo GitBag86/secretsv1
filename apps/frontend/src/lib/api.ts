@@ -19,7 +19,7 @@ export const api = {
   notes: {
     list: () => invoke<Note[]>("list_notes"),
     get: (id: string) => invoke<Note>("get_note", { id }),
-    create: (data: { title: string; content: string; notebook_id?: string }) =>
+    create: (data: { title: string; content: string; notebook_id?: string; id?: string }) =>
       invoke<Note>("create_note", data),
     update: (id: string, data: Partial<Note>) =>
       invoke<Note>("update_note", { id, ...data }),
@@ -28,7 +28,7 @@ export const api = {
   },
   todos: {
     list: () => invoke<Todo[]>("list_todos"),
-    create: (data: { title: string; description?: string; priority?: string; due_date?: number }) =>
+    create: (data: { title: string; description?: string; priority?: string; due_date?: number; id?: string; is_completed?: boolean }) =>
       invoke<Todo>("create_todo", data),
     update: (id: string, data: Partial<Todo>) =>
       invoke<Todo>("update_todo", { id, ...data }),
