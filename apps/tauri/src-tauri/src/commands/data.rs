@@ -106,39 +106,113 @@ pub struct ImportResult {
 
 #[tauri::command]
 pub async fn export_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<String, String> {
-    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    // Phase 1: Read all data from DB, then drop the lock before async decryption
+    let (mut notes, mut todos, mut events, notebooks, tags, note_tags, todo_tags) = {
+        let conn = pool.get().await.map_err(|e| e.to_string())?;
 
-    // --- Notes ---
-    let mut notes = Vec::new();
-    {
-        let mut stmt = conn.prepare("SELECT id, user_id, notebook_id, title, content, word_count, reading_time, is_pinned, is_archived, created_at, updated_at FROM notes").map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |r| {
-            Ok(ExportNote {
-                id: r.get(0)?, user_id: r.get(1)?, notebook_id: r.get(2)?,
-                title: r.get(3)?, content: r.get(4)?, word_count: r.get(5)?,
-                reading_time: r.get(6)?, is_pinned: r.get::<_, i64>(7)? != 0,
-                is_archived: r.get::<_, i64>(8)? != 0, created_at: r.get(9)?, updated_at: r.get(10)?,
-            })
-        }).map_err(|e| e.to_string())?;
-        for row in rows { if let Ok(n) = row { notes.push(n); } }
-    }
+        // --- Notes ---
+        let notes = {
+            let mut stmt = conn.prepare("SELECT id, user_id, notebook_id, title, content, word_count, reading_time, is_pinned, is_archived, created_at, updated_at FROM notes").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| {
+                Ok(ExportNote {
+                    id: r.get(0)?, user_id: r.get(1)?, notebook_id: r.get(2)?,
+                    title: r.get(3)?, content: r.get(4)?, word_count: r.get(5)?,
+                    reading_time: r.get(6)?, is_pinned: r.get::<_, i64>(7)? != 0,
+                    is_archived: r.get::<_, i64>(8)? != 0, created_at: r.get(9)?, updated_at: r.get(10)?,
+                })
+            }).map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            for row in rows { if let Ok(n) = row { out.push(n); } }
+            out
+        };
+
+        // --- Todos ---
+        let todos = {
+            let mut stmt = conn.prepare("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| {
+                Ok(ExportTodo {
+                    id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?,
+                    description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0,
+                    priority: r.get(5)?, due_date: r.get(6)?, created_at: r.get(7)?, updated_at: r.get(8)?,
+                })
+            }).map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            for row in rows { if let Ok(t) = row { out.push(t); } }
+            out
+        };
+
+        // --- Calendar Events ---
+        let events = {
+            let mut stmt = conn.prepare("SELECT id, user_id, title, description, start_time, end_time, all_day, color, rrule, parent_event_id, created_at, updated_at FROM calendar_events").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| {
+                Ok(ExportEvent {
+                    id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?,
+                    description: r.get(3)?, start_time: r.get(4)?, end_time: r.get(5)?,
+                    all_day: r.get::<_, i64>(6)? != 0, color: r.get(7)?, rrule: r.get(8)?,
+                    parent_event_id: r.get(9)?, created_at: r.get(10)?, updated_at: r.get(11)?,
+                })
+            }).map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            for row in rows { if let Ok(e) = row { out.push(e); } }
+            out
+        };
+
+        // --- Notebooks ---
+        let notebooks = {
+            let mut stmt = conn.prepare("SELECT id, user_id, name, color, sort_order, created_at, updated_at FROM notebooks").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| {
+                Ok(ExportNotebook {
+                    id: r.get(0)?, user_id: r.get(1)?, name: r.get(2)?, color: r.get(3)?,
+                    sort_order: r.get(4)?, created_at: r.get(5)?, updated_at: r.get(6)?,
+                })
+            }).map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            for row in rows { if let Ok(n) = row { out.push(n); } }
+            out
+        };
+
+        // --- Tags ---
+        let tags = {
+            let mut stmt = conn.prepare("SELECT id, user_id, name, color, created_at FROM tags").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| {
+                Ok(ExportTag {
+                    id: r.get(0)?, user_id: r.get(1)?, name: r.get(2)?, color: r.get(3)?, created_at: r.get(4)?,
+                })
+            }).map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            for row in rows { if let Ok(t) = row { out.push(t); } }
+            out
+        };
+
+        // --- Note Tags ---
+        let note_tags = {
+            let mut stmt = conn.prepare("SELECT note_id, tag_id FROM note_tags").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| {
+                Ok(ExportNoteTag { note_id: r.get(0)?, tag_id: r.get(1)? })
+            }).map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            for row in rows { if let Ok(nt) = row { out.push(nt); } }
+            out
+        };
+
+        // --- Todo Tags ---
+        let todo_tags = {
+            let mut stmt = conn.prepare("SELECT todo_id, tag_id FROM todo_tags").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| {
+                Ok(ExportTodoTag { todo_id: r.get(0)?, tag_id: r.get(1)? })
+            }).map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            for row in rows { if let Ok(tt) = row { out.push(tt); } }
+            out
+        };
+
+        (notes, todos, events, notebooks, tags, note_tags, todo_tags)
+    }; // conn dropped here — Mutex released before async decryption
+
+    // Phase 2: Decrypt all content without holding the DB lock
     for n in &mut notes {
         n.title = enc.try_decrypt(&n.title).await;
         n.content = enc.try_decrypt(&n.content).await;
-    }
-
-    // --- Todos ---
-    let mut todos = Vec::new();
-    {
-        let mut stmt = conn.prepare("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos").map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |r| {
-            Ok(ExportTodo {
-                id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?,
-                description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0,
-                priority: r.get(5)?, due_date: r.get(6)?, created_at: r.get(7)?, updated_at: r.get(8)?,
-            })
-        }).map_err(|e| e.to_string())?;
-        for row in rows { if let Ok(t) = row { todos.push(t); } }
     }
     for t in &mut todos {
         t.title = enc.try_decrypt(&t.title).await;
@@ -146,74 +220,12 @@ pub async fn export_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
             t.description = Some(enc.try_decrypt(d).await);
         }
     }
-
-    // --- Calendar Events ---
-    let mut events = Vec::new();
-    {
-        let mut stmt = conn.prepare("SELECT id, user_id, title, description, start_time, end_time, all_day, color, rrule, parent_event_id, created_at, updated_at FROM calendar_events").map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |r| {
-            Ok(ExportEvent {
-                id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?,
-                description: r.get(3)?, start_time: r.get(4)?, end_time: r.get(5)?,
-                all_day: r.get::<_, i64>(6)? != 0, color: r.get(7)?, rrule: r.get(8)?,
-                parent_event_id: r.get(9)?, created_at: r.get(10)?, updated_at: r.get(11)?,
-            })
-        }).map_err(|e| e.to_string())?;
-        for row in rows { if let Ok(e) = row { events.push(e); } }
-    }
     for e in &mut events {
         e.title = enc.try_decrypt(&e.title).await;
         if let Some(ref d) = e.description.clone() {
             e.description = Some(enc.try_decrypt(d).await);
         }
     }
-
-    // --- Notebooks ---
-    let mut notebooks = Vec::new();
-    {
-        let mut stmt = conn.prepare("SELECT id, user_id, name, color, sort_order, created_at, updated_at FROM notebooks").map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |r| {
-            Ok(ExportNotebook {
-                id: r.get(0)?, user_id: r.get(1)?, name: r.get(2)?, color: r.get(3)?,
-                sort_order: r.get(4)?, created_at: r.get(5)?, updated_at: r.get(6)?,
-            })
-        }).map_err(|e| e.to_string())?;
-        for row in rows { if let Ok(n) = row { notebooks.push(n); } }
-    }
-
-    // --- Tags ---
-    let mut tags = Vec::new();
-    {
-        let mut stmt = conn.prepare("SELECT id, user_id, name, color, created_at FROM tags").map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |r| {
-            Ok(ExportTag {
-                id: r.get(0)?, user_id: r.get(1)?, name: r.get(2)?, color: r.get(3)?, created_at: r.get(4)?,
-            })
-        }).map_err(|e| e.to_string())?;
-        for row in rows { if let Ok(t) = row { tags.push(t); } }
-    }
-
-    // --- Note Tags ---
-    let mut note_tags = Vec::new();
-    {
-        let mut stmt = conn.prepare("SELECT note_id, tag_id FROM note_tags").map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |r| {
-            Ok(ExportNoteTag { note_id: r.get(0)?, tag_id: r.get(1)? })
-        }).map_err(|e| e.to_string())?;
-        for row in rows { if let Ok(nt) = row { note_tags.push(nt); } }
-    }
-
-    // --- Todo Tags ---
-    let mut todo_tags = Vec::new();
-    {
-        let mut stmt = conn.prepare("SELECT todo_id, tag_id FROM todo_tags").map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |r| {
-            Ok(ExportTodoTag { todo_id: r.get(0)?, tag_id: r.get(1)? })
-        }).map_err(|e| e.to_string())?;
-        for row in rows { if let Ok(tt) = row { todo_tags.push(tt); } }
-    }
-
-    drop(conn);
 
     let export = ExportData {
         version: 1,
@@ -236,6 +248,32 @@ pub async fn import_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
         return Err("Database is locked. Unlock to import data.".into());
     }
     let export: ExportData = serde_json::from_str(&data).map_err(|e| format!("Invalid JSON: {}", e))?;
+
+    // Phase 1: Encrypt all content BEFORE acquiring DB Mutex to avoid Mutex-across-await
+    struct EncryptedNote { id: String, user_id: String, notebook_id: Option<String>, et: String, ec: String, word_count: i64, reading_time: i64, is_pinned: i64, is_archived: i64, created_at: i64, updated_at: i64 }
+    struct EncryptedTodo { id: String, user_id: String, et: String, ed: Option<String>, is_completed: i64, priority: String, due_date: Option<i64>, created_at: i64, updated_at: i64 }
+    struct EncryptedEvent { id: String, user_id: String, et: String, ed: Option<String>, start_time: i64, end_time: i64, all_day: i64, color: String, rrule: Option<String>, parent_event_id: Option<String>, created_at: i64, updated_at: i64 }
+
+    let mut enc_notes = Vec::new();
+    for n in &export.notes {
+        let et = enc.encrypt_or_pass(&n.title).await.map_err(|e| e.to_string())?;
+        let ec = enc.encrypt_or_pass(&n.content).await.map_err(|e| e.to_string())?;
+        enc_notes.push(EncryptedNote { id: n.id.clone(), user_id: n.user_id.clone(), notebook_id: n.notebook_id.clone(), et, ec, word_count: n.word_count, reading_time: n.reading_time, is_pinned: n.is_pinned as i64, is_archived: n.is_archived as i64, created_at: n.created_at, updated_at: n.updated_at });
+    }
+    let mut enc_todos = Vec::new();
+    for t in &export.todos {
+        let et = enc.encrypt_or_pass(&t.title).await.map_err(|e| e.to_string())?;
+        let ed = if let Some(ref d) = t.description { Some(enc.encrypt_or_pass(d).await.map_err(|e| e.to_string())?) } else { None };
+        enc_todos.push(EncryptedTodo { id: t.id.clone(), user_id: t.user_id.clone(), et, ed, is_completed: t.is_completed as i64, priority: t.priority.clone(), due_date: t.due_date, created_at: t.created_at, updated_at: t.updated_at });
+    }
+    let mut enc_events = Vec::new();
+    for e in &export.calendar_events {
+        let et = enc.encrypt_or_pass(&e.title).await.map_err(|e| e.to_string())?;
+        let ed = if let Some(ref d) = e.description { Some(enc.encrypt_or_pass(d).await.map_err(|e| e.to_string())?) } else { None };
+        enc_events.push(EncryptedEvent { id: e.id.clone(), user_id: e.user_id.clone(), et, ed, start_time: e.start_time, end_time: e.end_time, all_day: e.all_day as i64, color: e.color.clone(), rrule: e.rrule.clone(), parent_event_id: e.parent_event_id.clone(), created_at: e.created_at, updated_at: e.updated_at });
+    }
+
+    // Phase 2: All encryption done — acquire Mutex and do the DB transaction
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("BEGIN TRANSACTION", []).map_err(|e| e.to_string())?;
     let mut result = ImportResult {
@@ -267,13 +305,11 @@ pub async fn import_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
         }
     }
 
-    // --- Import notes (encrypt content) ---
-    for n in &export.notes {
-        let et = enc.encrypt_or_pass(&n.title).await.map_err(|e| e.to_string())?;
-        let ec = enc.encrypt_or_pass(&n.content).await.map_err(|e| e.to_string())?;
+    // --- Import notes (already encrypted) ---
+    for n in &enc_notes {
         if let Err(e) = conn.execute(
             "INSERT OR IGNORE INTO notes (id, user_id, notebook_id, title, content, word_count, reading_time, is_pinned, is_archived, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
-            (&n.id, &n.user_id, &n.notebook_id, &et, &ec, n.word_count, n.reading_time, n.is_pinned as i64, n.is_archived as i64, n.created_at, n.updated_at),
+            (&n.id, &n.user_id, &n.notebook_id, &n.et, &n.ec, n.word_count, n.reading_time, n.is_pinned, n.is_archived, n.created_at, n.updated_at),
         ) {
             result.errors.push(format!("note {}: {}", n.id, e));
         } else {
@@ -281,13 +317,11 @@ pub async fn import_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
         }
     }
 
-    // --- Import todos (encrypt content) ---
-    for t in &export.todos {
-        let et = enc.encrypt_or_pass(&t.title).await.map_err(|e| e.to_string())?;
-        let ed = if let Some(ref d) = t.description { Some(enc.encrypt_or_pass(d).await.map_err(|e| e.to_string())?) } else { None };
+    // --- Import todos (already encrypted) ---
+    for t in &enc_todos {
         if let Err(e) = conn.execute(
             "INSERT OR IGNORE INTO todos (id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
-            (&t.id, &t.user_id, &et, &ed, t.is_completed as i64, &t.priority, &t.due_date, t.created_at, t.updated_at),
+            (&t.id, &t.user_id, &t.et, &t.ed, t.is_completed, &t.priority, &t.due_date, t.created_at, t.updated_at),
         ) {
             result.errors.push(format!("todo {}: {}", t.id, e));
         } else {
@@ -295,13 +329,11 @@ pub async fn import_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
         }
     }
 
-    // --- Import calendar events (encrypt content) ---
-    for e in &export.calendar_events {
-        let et = enc.encrypt_or_pass(&e.title).await.map_err(|e| e.to_string())?;
-        let ed = if let Some(ref d) = e.description { Some(enc.encrypt_or_pass(d).await.map_err(|e| e.to_string())?) } else { None };
+    // --- Import calendar events (already encrypted) ---
+    for e in &enc_events {
         if let Err(ee) = conn.execute(
             "INSERT OR IGNORE INTO calendar_events (id, user_id, title, description, start_time, end_time, all_day, color, rrule, parent_event_id, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
-            (&e.id, &e.user_id, &et, &ed, e.start_time, e.end_time, e.all_day as i64, &e.color, &e.rrule, &e.parent_event_id, e.created_at, e.updated_at),
+            (&e.id, &e.user_id, &e.et, &e.ed, e.start_time, e.end_time, e.all_day, &e.color, &e.rrule, &e.parent_event_id, e.created_at, e.updated_at),
         ) {
             result.errors.push(format!("event {}: {}", e.id, ee));
         } else {

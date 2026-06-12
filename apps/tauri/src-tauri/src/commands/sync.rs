@@ -49,9 +49,13 @@ fn get_sync_credentials(conn: &rusqlite::Connection) -> Result<(String, String),
 #[tauri::command]
 pub async fn sync_push(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<serde_json::Value, String> {
     let (items, client) = {
-        let conn = pool.get().await.map_err(|e| e.to_string())?;
-        let (url, stored_key) = get_sync_credentials(&conn)?;
+        let (url, stored_key) = {
+            let conn = pool.get().await.map_err(|e| e.to_string())?;
+            get_sync_credentials(&conn)?
+        }; // conn dropped before async decrypt
+        let key = enc.try_decrypt(&stored_key).await;
         let items: Vec<(i64, String, String, String, Option<String>)> = {
+            let conn = pool.get().await.map_err(|e| e.to_string())?;
             let mut stmt = conn.prepare(
                 "SELECT id, entity_type, entity_id, operation, payload FROM sync_queue WHERE synced = 0 ORDER BY created_at ASC"
             ).map_err(|e| e.to_string())?;
@@ -66,7 +70,6 @@ pub async fn sync_push(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager
             for row in rows { if let Ok(r) = row { out.push(r); } }
             out
         };
-        let key = enc.try_decrypt(&stored_key).await;
         (items, SupabaseClient::new(url, key))
     }; // conn lock dropped here
 
@@ -131,13 +134,15 @@ pub async fn sync_push(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager
 #[tauri::command]
 pub async fn sync_pull(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<serde_json::Value, String> {
     let (since, client) = {
-        let conn = pool.get().await.map_err(|e| e.to_string())?;
-        let (url, stored_key) = get_sync_credentials(&conn)?;
-        let last_sync: Option<String> = conn.query_row(
-            "SELECT value FROM app_settings WHERE key = 'last_sync_at'",
-            [], |r| r.get(0)
-        ).ok();
-        let since = last_sync.and_then(|s| s.parse::<i64>().ok());
+        let (url, stored_key, since) = {
+            let conn = pool.get().await.map_err(|e| e.to_string())?;
+            let (url, stored_key) = get_sync_credentials(&conn)?;
+            let last_sync: Option<String> = conn.query_row(
+                "SELECT value FROM app_settings WHERE key = 'last_sync_at'",
+                [], |r| r.get(0)
+            ).ok();
+            (url, stored_key, last_sync.and_then(|s| s.parse::<i64>().ok()))
+        }; // conn dropped before async decrypt
         let key = enc.try_decrypt(&stored_key).await;
         (since, SupabaseClient::new(url, key))
     }; // conn lock dropped here
@@ -386,18 +391,20 @@ pub async fn configure_sync(pool: State<'_, DbPool>, enc: State<'_, EncryptionMa
     if enc.is_locked().await {
         return Err("Database is locked. Unlock to configure sync.".into());
     }
-    let conn = pool.get().await.map_err(|e| e.to_string())?;
-    let now = chrono::Utc::now().timestamp();
-    conn.execute(
-        "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('supabase_url', ?1, ?2)",
-        (&url, now)
-    ).map_err(|e| e.to_string())?;
-    // Encrypt the API key at rest
+    // Encrypt the API key BEFORE acquiring DB Mutex to avoid Mutex-across-await
     let encrypted_key = enc.encrypt_or_pass(&key).await.map_err(|e| e.to_string())?;
-    conn.execute(
-        "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('supabase_key', ?1, ?2)",
-        (&encrypted_key, now)
-    ).map_err(|e| e.to_string())?;
+    {
+        let conn = pool.get().await.map_err(|e| e.to_string())?;
+        let now = chrono::Utc::now().timestamp();
+        conn.execute(
+            "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('supabase_url', ?1, ?2)",
+            (&url, now)
+        ).map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('supabase_key', ?1, ?2)",
+            (&encrypted_key, now)
+        ).map_err(|e| e.to_string())?;
+    } // conn dropped before network I/O
     // Test the connection with the plaintext key
     let client = SupabaseClient::new(url, key);
     let ok = client.test_connection().await.unwrap_or(false);

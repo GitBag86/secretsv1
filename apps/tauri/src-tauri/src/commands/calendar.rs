@@ -64,13 +64,12 @@ pub async fn update_calendar_event(pool: State<'_, DbPool>, enc: State<'_, Encry
     helpers::require_valid_session(&pool, &enc).await?;
     if let Some(ref t) = title { validate_event_title(t)?; }
     if let Some(ref d) = description { validate_event_description(d)?; }
-    let (existing, conn) = {
+    let existing = {
         let conn = pool.get().await.map_err(|e| e.to_string())?;
-        let existing = conn.query_row("SELECT id, user_id, title, description, start_time, end_time, all_day, color, rrule, parent_event_id, created_at, updated_at FROM calendar_events WHERE id = ?1", [&id], |r| {
+        conn.query_row("SELECT id, user_id, title, description, start_time, end_time, all_day, color, rrule, parent_event_id, created_at, updated_at FROM calendar_events WHERE id = ?1", [&id], |r| {
             Ok(CalendarEvent { id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?, description: r.get(3)?, start_time: r.get(4)?, end_time: r.get(5)?, all_day: r.get::<_, i64>(6)? != 0, color: r.get(7)?, rrule: r.get(8)?, parent_event_id: r.get(9)?, created_at: r.get(10)?, updated_at: r.get(11)? })
-        }).map_err(|e| e.to_string())?;
-        (existing, conn)
-    };
+        }).map_err(|e| e.to_string())?
+    }; // conn dropped here — Mutex released before async encryption
     let stored_t = if let Some(ref nt) = title { enc.encrypt_or_pass(nt).await.map_err(|e| e.to_string())? } else { existing.title.clone() };
     let stored_d = if let Some(ref nd) = description { Some(enc.encrypt_or_pass(nd).await.map_err(|e| e.to_string())?) } else { existing.description.clone() };
     let resp_t = enc.try_decrypt(&stored_t).await;
@@ -81,10 +80,12 @@ pub async fn update_calendar_event(pool: State<'_, DbPool>, enc: State<'_, Encry
     let c = color.unwrap_or(existing.color);
     let rr = rrule.or(existing.rrule);
     let now = chrono::Utc::now().timestamp();
-    conn.execute("UPDATE calendar_events SET title=?1, description=?2, start_time=?3, end_time=?4, all_day=?5, color=?6, rrule=?7, updated_at=?8 WHERE id=?9", (&stored_t, &stored_d, st, et, ad as i64, &c, &rr, now, &id)).map_err(|e| e.to_string())?;
-    let payload = serde_json::json!({"id": &id, "title": &stored_t, "description": &stored_d, "start_time": st, "end_time": et, "all_day": ad, "color": &c, "rrule": &rr, "updated_at": now});
-    enqueue_sync(&conn, "event", &id, "update", Some(&payload.to_string())).ok();
-    drop(conn);
+    {
+        let conn = pool.get().await.map_err(|e| e.to_string())?;
+        conn.execute("UPDATE calendar_events SET title=?1, description=?2, start_time=?3, end_time=?4, all_day=?5, color=?6, rrule=?7, updated_at=?8 WHERE id=?9", (&stored_t, &stored_d, st, et, ad as i64, &c, &rr, now, &id)).map_err(|e| e.to_string())?;
+        let payload = serde_json::json!({"id": &id, "title": &stored_t, "description": &stored_d, "start_time": st, "end_time": et, "all_day": ad, "color": &c, "rrule": &rr, "updated_at": now});
+        enqueue_sync(&conn, "event", &id, "update", Some(&payload.to_string())).ok();
+    }
     Ok(CalendarEvent { id, user_id: existing.user_id, title: resp_t, description: resp_d, start_time: st, end_time: et, all_day: ad, color: c, rrule: rr, parent_event_id: existing.parent_event_id, created_at: existing.created_at, updated_at: now })
 }
 

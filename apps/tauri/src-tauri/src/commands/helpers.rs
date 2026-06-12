@@ -10,25 +10,32 @@ pub async fn require_valid_session(pool: &DbPool, enc: &EncryptionManager) -> Re
         return Err("Database is locked. Unlock first.".to_string());
     }
 
-    // Then check if the session has expired
-    let conn = pool.get().await.map_err(|e| e.to_string())?;
-    let unlocked_at_str: Result<String, _> = conn.query_row(
-        "SELECT value FROM app_settings WHERE key = 'session_unlocked_at'",
-        [],
-        |r| r.get(0)
-    );
+    // Read all DB values in one Mutex-guarded section, then release before any async work
+    let (unlocked_at_str, stored_hmac, timeout) = {
+        let conn = pool.get().await.map_err(|e| e.to_string())?;
+        let unlocked_at_str: Result<String, _> = conn.query_row(
+            "SELECT value FROM app_settings WHERE key = 'session_unlocked_at'",
+            [],
+            |r| r.get(0)
+        );
+        let stored_hmac: Result<String, _> = conn.query_row(
+            "SELECT value FROM app_settings WHERE key = 'session_hmac'",
+            [], |r| r.get(0)
+        );
+        let timeout: i64 = conn.query_row(
+            "SELECT COALESCE((SELECT value FROM app_settings WHERE key = 'session_timeout'), '15')",
+            [],
+            |r| r.get::<_, String>(0)
+        ).map(|v| v.parse().unwrap_or(15)).unwrap_or(15);
+        (unlocked_at_str, stored_hmac, timeout)
+    }; // conn dropped here — Mutex released
 
     match unlocked_at_str {
         Ok(unlocked_at_str) => {
-            // Verify HMAC to detect DB tampering
-            let stored_hmac: Result<String, _> = conn.query_row(
-                "SELECT value FROM app_settings WHERE key = 'session_hmac'",
-                [], |r| r.get(0)
-            );
+            // Verify HMAC to detect DB tampering — no Mutex held
             if let Ok(hmac) = stored_hmac {
                 if let Ok(false) = enc.verify_session_hmac(&unlocked_at_str, &hmac).await {
-                    // DB tampered — clear session immediately
-                    drop(conn);
+                    // DB tampered — clear session
                     enc.clear_key().await;
                     enc.clear_session_secret().await;
                     return Err("Session tampered. Please unlock again.".to_string());
@@ -36,15 +43,9 @@ pub async fn require_valid_session(pool: &DbPool, enc: &EncryptionManager) -> Re
             }
 
             let unlocked_at: i64 = unlocked_at_str.parse().map_err(|_| "Invalid timestamp".to_string())?;
-            let timeout: i64 = conn.query_row(
-                "SELECT COALESCE((SELECT value FROM app_settings WHERE key = 'session_timeout'), '15')",
-                [],
-                |r| r.get::<_, String>(0)
-            ).map(|v| v.parse().unwrap_or(15)).unwrap_or(15);
             let elapsed = chrono::Utc::now().timestamp() - unlocked_at;
             if elapsed >= timeout * 60 {
                 // Session expired — clear the encryption key to enforce the lock
-                drop(conn);
                 enc.clear_key().await;
                 enc.clear_session_secret().await;
                 return Err("Session expired. Please unlock the database again.".to_string());

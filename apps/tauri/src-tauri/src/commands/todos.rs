@@ -74,13 +74,13 @@ pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
             return Err(format!("Invalid priority '{}'. Must be one of: {:?}", p, valid_priorities));
         }
     }
-    let (existing, conn) = {
+    // Read existing todo, then drop conn BEFORE any async encryption work
+    let existing = {
         let conn = pool.get().await.map_err(|e| e.to_string())?;
-        let existing = conn.query_row("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos WHERE id = ?1", [&id], |r| {
+        conn.query_row("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos WHERE id = ?1", [&id], |r| {
             Ok(Todo { id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?, description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0, priority: r.get(5)?, due_date: r.get(6)?, created_at: r.get(7)?, updated_at: r.get(8)? })
-        }).map_err(|e| e.to_string())?;
-        (existing, conn)
-    };
+        }).map_err(|e| e.to_string())?
+    }; // conn dropped here — Mutex released before async encryption
     let stored_t = if let Some(ref nt) = title { enc.encrypt_or_pass(nt).await.map_err(|e| e.to_string())? } else { existing.title.clone() };
     let stored_d = if let Some(ref nd) = description { Some(enc.encrypt_or_pass(nd).await.map_err(|e| e.to_string())?) } else { existing.description.clone() };
     let resp_t = enc.try_decrypt(&stored_t).await;
@@ -90,26 +90,26 @@ pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     let p = priority.unwrap_or(existing.priority);
     let now = chrono::Utc::now().timestamp();
 
-    // If completing a recurring todo, advance it instead
-    if c {
-        if let Ok(()) = advance_recurring_todo(&conn, &id) {
-            // Recurrence handled — reset to uncompleted with advanced date
-            c = false;
-            // Re-read the advanced due_date from DB
-            if let Ok(advanced_due) = conn.query_row(
-                "SELECT due_date FROM todos WHERE id = ?1",
-                [&id],
-                |r| r.get::<_, Option<i64>>(0),
-            ) {
-                dd = advanced_due;
+    // Re-acquire Mutex for DB operations (recurring check + UPDATE)
+    {
+        let conn = pool.get().await.map_err(|e| e.to_string())?;
+        // If completing a recurring todo, advance it instead
+        if c {
+            if let Ok(()) = advance_recurring_todo(&conn, &id) {
+                c = false;
+                if let Ok(advanced_due) = conn.query_row(
+                    "SELECT due_date FROM todos WHERE id = ?1",
+                    [&id],
+                    |r| r.get::<_, Option<i64>>(0),
+                ) {
+                    dd = advanced_due;
+                }
             }
         }
-    }
-
-    conn.execute("UPDATE todos SET title=?1, description=?2, is_completed=?3, priority=?4, due_date=?5, updated_at=?6 WHERE id=?7", (&stored_t, &stored_d, c as i64, &p, &dd, now, &id)).map_err(|e| e.to_string())?;
-    let payload = serde_json::json!({"id": &id, "title": &stored_t, "description": &stored_d, "is_completed": c, "priority": &p, "due_date": &dd, "updated_at": now});
-    enqueue_sync(&conn, "todo", &id, "update", Some(&payload.to_string())).ok();
-    drop(conn);
+        conn.execute("UPDATE todos SET title=?1, description=?2, is_completed=?3, priority=?4, due_date=?5, updated_at=?6 WHERE id=?7", (&stored_t, &stored_d, c as i64, &p, &dd, now, &id)).map_err(|e| e.to_string())?;
+        let payload = serde_json::json!({"id": &id, "title": &stored_t, "description": &stored_d, "is_completed": c, "priority": &p, "due_date": &dd, "updated_at": now});
+        enqueue_sync(&conn, "todo", &id, "update", Some(&payload.to_string())).ok();
+    } // conn dropped here
     Ok(Todo { id, user_id: existing.user_id, title: resp_t, description: resp_d, is_completed: c, priority: p, due_date: dd, created_at: existing.created_at, updated_at: now })
 }
 

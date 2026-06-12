@@ -28,8 +28,8 @@ pub async fn restore_note(pool: State<'_, DbPool>, id: String) -> Result<(), Str
 
 #[tauri::command]
 pub async fn list_archived_notes(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<Vec<crate::commands::notes::Note>, String> {
-    let conn = pool.get().await.map_err(|e| e.to_string())?;
     let mut notes = {
+        let conn = pool.get().await.map_err(|e| e.to_string())?;
         let mut stmt = conn.prepare("SELECT id, user_id, notebook_id, title, content, word_count, reading_time, is_pinned, is_archived, created_at, updated_at FROM notes WHERE is_archived = 1 ORDER BY updated_at DESC").map_err(|e| e.to_string())?;
         let mut notes = Vec::new();
         let rows = stmt.query_map([], |r| {
@@ -42,7 +42,7 @@ pub async fn list_archived_notes(pool: State<'_, DbPool>, enc: State<'_, Encrypt
         }).map_err(|e| e.to_string())?;
         for row in rows { if let Ok(n) = row { notes.push(n); } }
         notes
-    }; // stmt dropped here, conn no longer borrowed
+    }; // conn dropped here — Mutex released before async decryption
     crate::commands::notes::decrypt_notes(&enc, &mut notes).await;
     Ok(notes)
 }
@@ -93,8 +93,8 @@ pub async fn restore_todo(pool: State<'_, DbPool>, id: String) -> Result<(), Str
 
 #[tauri::command]
 pub async fn list_archived_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<Vec<crate::commands::todos::Todo>, String> {
-    let conn = pool.get().await.map_err(|e| e.to_string())?;
     let mut todos = {
+        let conn = pool.get().await.map_err(|e| e.to_string())?;
         let mut stmt = conn.prepare("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos WHERE is_archived = 1 ORDER BY updated_at DESC").map_err(|e| e.to_string())?;
         let mut todos = Vec::new();
         let rows = stmt.query_map([], |r| {
@@ -106,7 +106,7 @@ pub async fn list_archived_todos(pool: State<'_, DbPool>, enc: State<'_, Encrypt
         }).map_err(|e| e.to_string())?;
         for row in rows { if let Ok(t) = row { todos.push(t); } }
         todos
-    }; // stmt dropped here
+    }; // conn dropped here — Mutex released before async decryption
     for t in &mut todos {
         helpers::decrypt_todo(&enc, t).await;
     }

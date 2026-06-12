@@ -15,6 +15,7 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .setup(|app| {
             app.manage(EncryptionManager::new());
+            app.manage(commands::auth::RateLimiter::new());
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = database::pool::init_pool(&app_handle).await {
