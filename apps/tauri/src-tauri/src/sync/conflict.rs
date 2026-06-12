@@ -7,6 +7,7 @@ pub struct VectorClock { pub clocks: HashMap<String, i64> }
 impl VectorClock {
     pub fn new() -> Self { Self { clocks: HashMap::new() } }
     pub fn increment(&mut self, node_id: &str) { *self.clocks.entry(node_id.to_string()).or_insert(0) += 1; }
+    #[allow(dead_code)]
     pub fn merge(&mut self, other: &VectorClock) {
         for (node, count) in &other.clocks {
             let entry = self.clocks.entry(node.clone()).or_insert(0);

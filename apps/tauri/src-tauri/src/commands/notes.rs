@@ -117,9 +117,6 @@ pub async fn delete_note(pool: State<'_, DbPool>, id: String) -> Result<(), Stri
     Ok(())
 }
 
-fn strip_html(s: &str) -> String {
-    helpers::strip_html(s)
-}
 
 #[tauri::command]
 pub async fn search_notes(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, query: String) -> Result<Vec<Note>, String> {

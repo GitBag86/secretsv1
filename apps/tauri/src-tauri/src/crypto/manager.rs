@@ -30,7 +30,8 @@ impl EncryptionManager {
         Ok(versioned_salt)
     }
 
-    /// Legacy: set key from raw salt bytes using SHA-256 (kept for backward compat).
+    /// Legacy: set key from raw salt bytes using SHA-256 (kept for backward compat, tests only).
+    #[cfg(test)]
     pub async fn set_key(&self, password: &str, salt: &[u8]) {
         let (derived, _) = key_derivation::derive_key_sha256(password, salt);
         *self.key.lock().await = Some(derived);
