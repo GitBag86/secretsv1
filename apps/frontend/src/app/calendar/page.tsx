@@ -8,7 +8,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import rrulePlugin from "@fullcalendar/rrule";
-import type { EventClickArg, DateSelectArg, EventDropArg } from "@fullcalendar/core";
+import type { EventClickArg, DateSelectArg, EventDropArg, EventResizeArg } from "@fullcalendar/core";
 
 export default function CalendarPage() {
   const { events, isLoading, create, update, remove } = useCalendar();
@@ -105,7 +105,16 @@ export default function CalendarPage() {
     try {
       await update.mutateAsync({ id: info.event.id, start_time: startSec, end_time: endSec });
     } catch {
-      // Revert the drop on failure
+      info.revert();
+    }
+  };
+
+  const handleEventResize = async (info: EventResizeArg) => {
+    const startSec = Math.floor(info.event.start!.getTime() / 1000);
+    const endSec = Math.floor(info.event.end!.getTime() / 1000);
+    try {
+      await update.mutateAsync({ id: info.event.id, start_time: startSec, end_time: endSec });
+    } catch {
       info.revert();
     }
   };
@@ -135,7 +144,9 @@ export default function CalendarPage() {
               select={handleSelect}
               eventClick={handleEventClick}
               eventDrop={handleEventDrop}
+              eventResize={handleEventResize}
               editable
+              eventResizableFromStart
               dayMaxEvents
               weekNumbers
               nowIndicator

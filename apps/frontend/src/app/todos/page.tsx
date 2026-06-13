@@ -32,7 +32,7 @@ type SortMode = "created" | "due_date" | "priority";
 const priorityOrder = { high: 0, medium: 1, low: 2 };
 
 export default function TodosPage() {
-  const { todos, isLoading, create, update, remove, bulkUpdate, bulkDelete } = useTodos();
+  const { todos, isLoading, create, update, remove, bulkUpdate, bulkDelete, refresh } = useTodos();
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [filter, setFilter] = useState<FilterMode>("all");
@@ -41,6 +41,7 @@ export default function TodosPage() {
   const [editingTagTodo, setEditingTagTodo] = useState<string | null>(null);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [newTagName, setNewTagName] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { tags: allTags, create: createTag } = useTags();
   const { data: recurringTodos = [] } = useQuery({
     queryKey: ["recurring-todos"],
@@ -226,13 +227,41 @@ export default function TodosPage() {
             ))}
           </div>
         )}
-        {todos.length > 0 && (
+{todos.length > 0 && (
           <div className="flex gap-2 mb-4 text-xs">
+            <input
+              type="checkbox"
+              checked={selectedIds.size > 0 && selectedIds.size === filtered.length}
+              ref={(el) => {
+                if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filtered.length;
+              }}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setSelectedIds(new Set(filtered.map((t) => t.id)));
+                } else {
+                  setSelectedIds(new Set());
+                }
+              }}
+              className="h-4 w-4"
+              title="Select all"
+            />
             <button onClick={() => bulkUpdate.mutate({ ids: allIds, is_completed: !allCompleted })} disabled={bulkUpdate.isPending} className="px-2 py-1 rounded border hover:bg-accent">
               {allCompleted ? "Mark all active" : "Mark all done"}
             </button>
-            <button onClick={() => bulkDelete.mutate(completedIds)} disabled={bulkDelete.isPending || completedIds.length === 0} className="px-2 py-1 rounded border text-destructive hover:bg-destructive/10">
-              Delete completed ({completedIds.length})
+            <button onClick={() => {
+              const selectedCompleted = Array.from(selectedIds).filter((id) => todos.find((t) => t.id === id)?.is_completed);
+              if (selectedCompleted.length > 0) {
+                if (confirm(`Delete ${selectedCompleted.length} selected item(s)?`)) {
+                  bulkDelete.mutate(selectedCompleted);
+                  setSelectedIds(new Set());
+                }
+              } else if (completedIds.length > 0) {
+                if (confirm(`Delete all ${completedIds.length} completed items?`)) {
+                  bulkDelete.mutate(completedIds);
+                }
+              }
+            }} disabled={bulkDelete.isPending || (selectedIds.size === 0 && completedIds.length === 0)} className="px-2 py-1 rounded border text-destructive hover:bg-destructive/10">
+              {selectedIds.size > 0 ? `Delete selected (${selectedIds.size})` : `Delete completed (${completedIds.length})`}
             </button>
           </div>
         )}
@@ -245,7 +274,24 @@ export default function TodosPage() {
             {filtered.map((todo) => (
               <div key={todo.id} className="rounded-lg border bg-card p-3 sm:p-3.5 shadow-sm">
                 <div className="flex items-start sm:items-center gap-2 sm:gap-3">
-                  <input type="checkbox" checked={todo.is_completed} onChange={() => toggleTodo(todo.id, todo.is_completed)} className="h-4 w-4" />
+                  <input
+                       type="checkbox"
+                       checked={selectedIds.has(todo.id)}
+                       onChange={(e) => {
+                         e.stopPropagation();
+                         const newSet = new Set(selectedIds);
+                         if (e.target.checked) {
+                           newSet.add(todo.id);
+                         } else {
+                           newSet.delete(todo.id);
+                         }
+                         setSelectedIds(newSet);
+                       }}
+                       onClick={(e) => e.stopPropagation()}
+                       className="h-4 w-4"
+                       title="Select for bulk action"
+                     />
+                     <input type="checkbox" checked={todo.is_completed} onChange={() => toggleTodo(todo.id, todo.is_completed)} className="h-4 w-4" />
                   <div className="flex-1 min-w-0">
                     <p className={`font-medium truncate ${todo.is_completed ? "line-through text-muted-foreground" : ""}`}>{todo.title}</p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">

@@ -85,6 +85,7 @@ export const api = {
       invoke<Attachment>("attach_file", { noteId, filename, mimeType, dataBase64 }),
     delete: (id: string) => invoke<void>("delete_attachment", { id }),
     open: (id: string) => invoke<void>("open_attachment", { id }),
+    preview: (id: string) => invoke<string>("get_attachment_preview", { id }),
     getAllCounts: () => invoke<{ note_id: string; count: number }[]>("get_all_attachment_counts"),
   },
   recurringTodos: {
@@ -115,7 +116,7 @@ export const api = {
     unified: (query: string) => invoke<UnifiedSearchItem[]>("unified_search", { query }),
   },
   data: {
-    exportData: () => invoke<string>("export_data"),
+    exportData: (notebookId?: string, tagIds?: string[]) => invoke<string>("export_data", { filter_notebook_id: notebookId, filter_tag_ids: tagIds }),
     importData: (data: string) =>
       invoke<{ notes: number; todos: number; events: number; notebooks: number; tags: number; note_tags: number; todo_tags: number; errors: string[] }>("import_data", { data }),
   },
@@ -127,5 +128,6 @@ export const api = {
       invoke<{ configured: boolean; connection_ok: boolean }>("configure_sync", { url, key }),
     getConfig: () =>
       invoke<{ url: string | null; has_key: boolean }>("get_sync_config"),
+    getConflicts: () => invoke<{ entity_id: string; entity_type: string; payload: string; vector_clock: string; created_at: number }[]>("get_sync_conflicts"),
   },
 };

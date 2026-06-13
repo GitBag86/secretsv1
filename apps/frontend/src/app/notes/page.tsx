@@ -170,7 +170,6 @@ export default function NotesPage() {
   const handleSaveEdit = async () => {
     if (!editingNote || !editTitle.trim()) return;
     await update.mutateAsync({ id: editingNote.id, title: editTitle, content: editContent });
-    // Save tag associations
     await setNoteTags.mutateAsync(editTagIds);
     setEditingNote(null);
   };
@@ -186,6 +185,76 @@ export default function NotesPage() {
     const created = await createTag.mutateAsync({ name: newTagName.trim() });
     setEditTagIds((prev) => [...prev, created.id]);
     setNewTagName("");
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "e" && !showForm) {
+        e.preventDefault();
+        setShowForm(true);
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "F") {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder="Search notes..."]') as HTMLInputElement;
+        searchInput?.focus();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        if (showForm && title.trim()) handleCreate();
+        else if (editingNote && editTitle.trim()) handleSaveEdit();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showForm, title, editingNote, editTitle]);
+
+// Attachments component with preview support
+  const AttachmentPreview = ({ att }: { att: typeof noteAttachments[0] }) => {
+    const isImage = att.mime_type.startsWith("image/");
+    const previewQuery = useQuery({
+      queryKey: ["attachment-preview", att.id],
+      queryFn: () => api.attachments.preview(att.id),
+      enabled: isImage && !!editingNote,
+      staleTime: 60000,
+    });
+    const previewUrl = previewQuery.data ? `data:${att.mime_type};base64,${previewQuery.data}` : null;
+
+    const getFileIcon = () => {
+      if (att.mime_type.startsWith("image/")) return "🖼️";
+      if (att.mime_type.includes("pdf")) return "📄";
+      if (att.mime_type.includes("text")) return "📝";
+      if (att.mime_type.includes("video")) return "🎥";
+      if (att.mime_type.includes("audio")) return "🎵";
+      return "📎";
+    };
+
+    return (
+      <div className="flex items-start gap-2 text-xs">
+        {isImage && previewUrl ? (
+          <img src={previewUrl} alt={att.filename} className="w-12 h-12 object-cover rounded border" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+        ) : (
+          <span className="text-lg">{getFileIcon()}</span>
+        )}
+        <div className="flex-1 min-w-0">
+          <span
+            className="truncate text-primary hover:underline cursor-pointer block"
+            onClick={() => api.attachments.open(att.id)}
+            title="Open file"
+          >
+            {att.filename}
+          </span>
+          <span className="text-muted-foreground">
+            {att.size > 1024 * 1024
+              ? `${(att.size / 1024 / 1024).toFixed(1)} MB`
+              : `${(att.size / 1024).toFixed(0)} KB`}
+          </span>
+        </div>
+        <button
+          onClick={() => deleteAttachment.mutate(att.id)}
+          className="text-destructive hover:underline shrink-0"
+        >
+          Delete
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -321,26 +390,7 @@ export default function NotesPage() {
               {noteAttachments.length > 0 && (
                 <div className="space-y-1.5 mb-2">
                   {noteAttachments.map((att) => (
-                    <div key={att.id} className="flex items-center gap-2 text-xs">
-                      <span
-                        className="flex-1 truncate text-primary hover:underline cursor-pointer"
-                        onClick={() => api.attachments.open(att.id)}
-                        title="Open file"
-                      >
-                        📎 {att.filename}
-                      </span>
-                      <span className="text-muted-foreground shrink-0">
-                        {att.size > 1024 * 1024
-                          ? `${(att.size / 1024 / 1024).toFixed(1)} MB`
-                          : `${(att.size / 1024).toFixed(0)} KB`}
-                      </span>
-                      <button
-                        onClick={() => deleteAttachment.mutate(att.id)}
-                        className="text-destructive hover:underline shrink-0"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    <AttachmentPreview key={att.id} att={att} />
                   ))}
                 </div>
               )}

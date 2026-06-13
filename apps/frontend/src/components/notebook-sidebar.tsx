@@ -32,7 +32,6 @@ export function NotebookSidebar({ activeNotebook, onSelect }: { activeNotebook: 
     const [moved] = items.splice(dragIdx.current, 1);
     items.splice(idx, 0, moved);
     dragIdx.current = null;
-    // Save the new order: fire all mutations at once
     items.forEach((nb, i) => {
       if (nb.sort_order !== i) update.mutate({ id: nb.id, sort_order: i });
     });
@@ -108,7 +107,7 @@ export function NotebookSidebar({ activeNotebook, onSelect }: { activeNotebook: 
       {sidebarOpen && (
         <div className="md:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-          <aside className="absolute left-0 top-0 bottom-0 w-64 bg-card border-r shadow-xl flex flex-col">
+          <aside className="absolute left-0 top-0 bottom-0 w-64 bg-card border-r shadow-xl flex flex-col animate-in slide-in-from-left">
             <div className="p-3 border-b flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase">Notebooks</span>
               <button onClick={() => setSidebarOpen(false)} className="p-1 rounded-md hover:bg-accent" aria-label="Close">

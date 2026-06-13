@@ -40,5 +40,8 @@ export function useTodos() {
     mutationFn: (ids: string[]) => api.todos.bulkDelete(ids),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] }),
   });
-  return { todos, isLoading, create, update, remove, bulkUpdate, bulkDelete };
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["todos"] });
+
+  return { todos, isLoading, create, update, remove, bulkUpdate, bulkDelete, refresh };
 }

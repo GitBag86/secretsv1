@@ -40,7 +40,8 @@ pub async fn create_template(pool: State<'_, DbPool>, enc: State<'_, EncryptionM
 }
 
 #[tauri::command]
-pub async fn delete_template(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
+pub async fn delete_template(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String) -> Result<(), String> {
+    crate::commands::helpers::require_valid_session(&pool, &enc).await?;
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM templates WHERE id = ?1", [&id]).map_err(|e| e.to_string())?;
     drop(conn);
