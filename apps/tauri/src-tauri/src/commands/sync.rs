@@ -429,6 +429,30 @@ pub async fn get_sync_config(pool: State<'_, DbPool>) -> Result<serde_json::Valu
     }))
 }
 
+#[tauri::command]
+pub async fn get_sync_conflicts(pool: State<'_, DbPool>) -> Result<Vec<serde_json::Value>, String> {
+    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT entity_id, entity_type, payload, vector_clock, created_at FROM sync_queue WHERE synced = 1 ORDER BY created_at DESC LIMIT 100"
+    ).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |r| {
+        Ok(serde_json::json!({
+            "entity_id": r.get::<_, String>(0)?,
+            "entity_type": r.get::<_, String>(1)?,
+            "payload": r.get::<_, String>(2)?,
+            "vector_clock": r.get::<_, String>(3)?,
+            "created_at": r.get::<_, i64>(4)?,
+        }))
+    }).map_err(|e| e.to_string())?;
+    let mut conflicts = Vec::new();
+    for row in rows {
+        if let Ok(v) = row {
+            conflicts.push(v);
+        }
+    }
+    Ok(conflicts)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

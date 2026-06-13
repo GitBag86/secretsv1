@@ -29,6 +29,7 @@ export default function SettingsPage() {
   const [syncResult, setSyncResult] = useState<any>(null);
   const queryClient = useQueryClient();
   const { data: allTags = [] } = useQuery({ queryKey: ["tags"], queryFn: api.tags.list });
+  const { data: notebooks = [] } = useQuery({ queryKey: ["notebooks"], queryFn: api.notebooks.list });
   const [editTagId, setEditTagId] = useState<string | null>(null);
   const [editTagName, setEditTagName] = useState("");
   const [editTagColor, setEditTagColor] = useState("#6b7280");
@@ -37,6 +38,8 @@ export default function SettingsPage() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [tmplName, setTmplName] = useState("");
+  const [exportFilterNotebook, setExportFilterNotebook] = useState<string | null>(null);
+  const [exportFilterTags, setExportFilterTags] = useState<string[]>([]);
 
   const { data: allTemplates = [] } = useQuery({
     queryKey: ["templates"],
@@ -320,13 +323,62 @@ export default function SettingsPage() {
             Export all your data as JSON, or import from a previously exported file.
             Exported data is decrypted and contains all notes, todos, events, notebooks, and tags.
           </p>
+
+          {/* Export filters */}
+          <div className="space-y-3 border rounded-md p-3 bg-muted/20">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <select
+                value={exportFilterNotebook ?? ""}
+                onChange={(e) => setExportFilterNotebook(e.target.value || null)}
+                className="flex-1 p-1.5 text-xs border rounded-md bg-background"
+              >
+                <option value="">All notebooks</option>
+                {notebooks.map((nb) => (
+                  <option key={nb.id} value={nb.id}>{nb.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {allTags.map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => {
+                    setExportFilterTags((prev) =>
+                      prev.includes(tag.id) ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                    );
+                  }}
+                  className={`text-xs px-2 py-0.5 rounded-full border transition-all ${
+                    exportFilterTags.includes(tag.id) ? "text-white font-medium" : "hover:bg-accent"
+                  }`}
+                  style={{
+                    backgroundColor: exportFilterTags.includes(tag.id) ? tag.color : "transparent",
+                    borderColor: tag.color,
+                    color: exportFilterTags.includes(tag.id) ? "#fff" : tag.color,
+                  }}
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+            {exportFilterTags.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setExportFilterTags([])}
+                className="text-xs text-muted-foreground hover:underline"
+              >
+                Clear tag filters
+              </button>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-3">
             <button
               disabled={exporting || importing}
               onClick={async () => {
                 setExporting(true);
                 try {
-                  const json = await api.data.exportData();
+                  const json = await api.data.exportData(exportFilterNotebook ?? undefined, exportFilterTags.length > 0 ? exportFilterTags : undefined);
                   const blob = new Blob([json], { type: "application/json" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
@@ -545,6 +597,42 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
+          )}
+        </section>
+
+        <section className="rounded-lg border bg-card p-6 space-y-4">
+          <h2 className="text-lg font-semibold">Sync Conflicts</h2>
+          {syncConfigured ? (
+            <>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    setSyncResult(null);
+                    try {
+                      const conflicts = await api.sync.getConflicts();
+                      setSyncResult({ conflicts: conflicts.length, details: conflicts.slice(0, 5) });
+                    } catch (e: any) {
+                      setSyncResult({ error: String(e) });
+                    }
+                  }}
+                  className="text-xs border px-2 py-1 rounded hover:bg-accent"
+                >
+                  Check Conflicts
+                </button>
+              </div>
+              {syncResult && syncResult.conflicts !== undefined && (
+                <p className="text-sm text-muted-foreground">
+                  {syncResult.conflicts} synced entity(ies) in history
+                  {syncResult.details && syncResult.details.length > 0 && (
+                    <span className="block mt-1 text-xs truncate">
+                      Last: {syncResult.details.map((d: any) => d.entity_id).join(", ")}
+                    </span>
+                  )}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Configure sync to view conflicts.</p>
           )}
         </section>
 

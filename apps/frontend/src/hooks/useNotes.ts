@@ -32,5 +32,8 @@ export function useNotes() {
       push({ id, type: "note", action: "delete", before, after: null, label: "Delete note" });
     },
   });
-  return { notes, isLoading, create, update, remove };
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["notes"] });
+
+  return { notes, isLoading, create, update, remove, refresh };
 }

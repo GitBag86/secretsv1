@@ -105,7 +105,12 @@ pub struct ImportResult {
 }
 
 #[tauri::command]
-pub async fn export_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<String, String> {
+pub async fn export_data(
+    pool: State<'_, DbPool>,
+    enc: State<'_, EncryptionManager>,
+    filter_notebook_id: Option<String>,
+    filter_tag_ids: Option<Vec<String>>,
+) -> Result<String, String> {
     // Phase 1: Read all data from DB, then drop the lock before async decryption
     let (mut notes, mut todos, mut events, notebooks, tags, note_tags, todo_tags) = {
         let conn = pool.get().await.map_err(|e| e.to_string())?;
@@ -210,6 +215,21 @@ pub async fn export_data(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     }; // conn dropped here — Mutex released before async decryption
 
     // Phase 2: Decrypt all content without holding the DB lock
+    // Apply filters if specified
+    if let Some(filter_id) = filter_notebook_id {
+        notes.retain(|n| n.notebook_id.as_ref() == Some(&filter_id));
+    }
+    if let Some(ref filter_tags) = filter_tag_ids {
+        if !filter_tags.is_empty() {
+            let note_tag_set: std::collections::HashSet<String> = note_tags
+                .iter()
+                .filter(|nt| filter_tags.contains(&nt.tag_id))
+                .map(|nt| nt.note_id.clone())
+                .collect();
+            notes.retain(|n| note_tag_set.contains(&n.id));
+        }
+    }
+
     for n in &mut notes {
         n.title = enc.try_decrypt(&n.title).await;
         n.content = enc.try_decrypt(&n.content).await;

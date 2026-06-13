@@ -179,7 +179,7 @@ pub async fn open_attachment(
         raw_data
     };
 
-    // Write decrypted data to a temp file and open with OS default app
+    // Write to temp file and open with OS default app
     let temp_dir = std::env::temp_dir();
     let filename = std::path::Path::new(&storage_path)
         .file_name()
@@ -194,6 +194,37 @@ pub async fn open_attachment(
         .map_err(|e| format!("Failed to open file: {}", e))?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_attachment_preview(
+    pool: State<'_, DbPool>,
+    enc: State<'_, EncryptionManager>,
+    id: String,
+) -> Result<String, String> {
+    if enc.is_locked().await {
+        return Err("Database is locked. Unlock to preview attachments.".into());
+    }
+    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    let (storage_path, is_encrypted): (String, bool) = conn.query_row(
+        "SELECT storage_path, encrypted FROM attachments WHERE id = ?1",
+        [&id],
+        |r| Ok((r.get(0)?, r.get::<_, i64>(1)? != 0)),
+    ).map_err(|_| "Attachment not found".to_string())?;
+    drop(conn);
+
+    let raw_data = std::fs::read(&storage_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    let data = if is_encrypted {
+        enc.decrypt_raw(&raw_data).await
+            .map_err(|e| format!("Failed to decrypt: {}", e))?
+    } else {
+        raw_data
+    };
+
+    let base64 = base64::engine::general_purpose::STANDARD.encode(&data);
+    Ok(base64)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
