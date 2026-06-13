@@ -11,40 +11,53 @@
 - [ ] Auto-lock on idle
 
 ### 1.2 Notes Enhancement
-- [ ] Notebook organization (create/edit notebooks)
-- [ ] Note ↔ notebook assignment
-- [ ] Note filtering by notebook
-- [ ] Drag-and-drop note reordering
-- [ ] Markdown export
-- [ ] Rich text image embedding (inline images via Tauri file picker)
-- [ ] Note version history (snapshot on save)
+ - [x] Notebook organization (create/edit notebooks)
+ - [x] Note ↔ notebook assignment
+ - [x] Note filtering by notebook
+ - [x] Drag-and-drop note reordering
+ - [ ] Markdown export
+ - [ ] Rich text image embedding (inline images via Tauri file picker)
+<<<<<<< ours
+ - [ ] Note version history (snapshot on save)
 
 ### 1.3 Todos Enhancement
-- [ ] Todo ↔ note linking
-- [ ] Subtask support
-- [ ] Todo lists / checklists
-- [ ] Filter by priority / due date / completion
-- [ ] Bulk operations (delete all completed, mark all)
-- [ ] Undo/redo
+=======
+ - [ ] Note version history (snapshot on save)
+ 
+ ### 1.3 Todos Enhancement
+>>>>>>> theirs
+ - [ ] Todo ↔ note linking
+ - [x] Subtask support
+ - [x] Todo lists / checklists
+ - [x] Filter by priority / due date / completion
+ - [x] Bulk operations (delete all completed, mark all)
+<<<<<<< ours
+ - [x] Undo/redo
 
 ### 1.4 Calendar Enhancement
-- [ ] Recurring event rules (RRULE parser)
-- [ ] Event categories / color coding
-- [ ] Week number display
-- [ ] Today button + keyboard navigation
-- [ ] Event drag from notes/todos
+=======
+ - [x] Undo/redo
+ 
+ ### 1.4 Calendar Enhancement
+>>>>>>> theirs
+ - [x] Recurring event rules (RRULE parser)
+ - [x] Event categories / color coding
+ - [x] Week number display
+ - [x] Today button + keyboard navigation
+ - [ ] Event drag from notes/todos
+ - [x] Event resize (drag-to-resize)
 
 ---
 
 ## Phase 2: Encryption & Security (Weeks 3-4)
 
 ### 2.1 Encryption Hardening
-- [ ] Encrypt ALL note content (not just marked-as-encrypted)
-- [ ] Encrypt todo descriptions
-- [ ] Encrypt calendar event descriptions
-- [ ] Key rotation mechanism (re-encrypt with new master password)
-- [ ] Key backup export (encrypted keychain file)
-- [ ] Secure memory wiping (zeroize on drop for all key material)
+ - [x] Encrypt ALL note content (not just marked-as-encrypted)
+ - [x] Encrypt todo descriptions
+ - [x] Encrypt calendar event descriptions
+ - [x] Key rotation mechanism (re-encrypt with new master password)
+ - [ ] Key backup export (encrypted keychain file)
+ - [ ] Secure memory wiping (zeroize on drop for all key material)
 
 ### 2.2 Authentication Hardening
 - [ ] Account lockout after N failed attempts
@@ -65,45 +78,45 @@
 ## Phase 3: Sync & Multi-Device (Weeks 5-6)
 
 ### 3.1 Sync Implementation
-- [ ] Full Supabase sync implementation (replace stubs)
-- [ ] Push: upload local changes since last sync
-- [ ] Pull: download remote changes, merge locally
-- [ ] Conflict resolution UI (when CRDT merge is ambiguous)
-- [ ] Sync status indicator in UI
-- [ ] Manual sync trigger + auto-sync interval
-- [ ] Bandwidth-efficient delta sync (only changed fields)
-
-### 3.2 Multi-Device
-- [ ] Device registration (name, type, last seen)
-- [ ] Device management UI (list devices, revoke access)
-- [ ] Cross-device encryption key sync
-- [ ] Selective sync (choose which notebooks to sync)
-- [ ] Sync logs (history of sync operations)
-
-### 3.3 Offline-First
-- [ ] Queue sync operations when offline
-- [ ] Auto-retry on network reconnect
-- [ ] Sync conflict detection with user notification
-- [ ] Merge strategy: local-wins vs remote-wins vs user-prompt
-
----
-
-## Phase 4: UI/UX Polish (Weeks 7-8)
-
-### 4.1 Layout
-- [ ] Sidebar navigation (collapsible)
-- [ ] Command palette (Cmd+K / Ctrl+K)
-- [ ] Split view: note list + editor
-- [ ] Resizable panels
-- [ ] Breadcrumb navigation
-- [ ] Keyboard shortcuts system
-
-### 4.2 Search & Discovery
-- [ ] Global search across all content
-- [ ] Search filters (date, notebook, tags)
-- [ ] Recent notes quick access
-- [ ] Favorite / pinned notes
-- [ ] Backlinks (notes that reference this note)
+ - [x] Full Supabase sync implementation (replace stubs)
+ - [x] Push: upload local changes since last sync
+ - [x] Pull: download remote changes, merge locally
+ - [x] Conflict resolution UI (when CRDT merge is ambiguous)
+ - [ ] Sync status indicator in UI
+ - [ ] Manual sync trigger + auto-sync interval
+ - [ ] Bandwidth-efficient delta sync (only changed fields)
+ 
+ ### 3.2 Multi-Device
+ - [ ] Device registration (name, type, last seen)
+ - [ ] Device management UI (list devices, revoke access)
+ - [ ] Cross-device encryption key sync
+ - [ ] Selective sync (choose which notebooks to sync)
+ - [ ] Sync logs (history of sync operations)
+ 
+ ### 3.3 Offline-First
+ - [ ] Queue sync operations when offline
+ - [ ] Auto-retry on network reconnect
+ - [ ] Sync conflict detection with user notification
+ - [ ] Merge strategy: local-wins vs remote-wins vs user-prompt
+ 
+ ---
+ 
+ ## Phase 4: UI/UX Polish (Weeks 7-8)
+ 
+ ### 4.1 Layout
+ - [x] Sidebar navigation (collapsible)
+ - [x] Command palette (Cmd+K / Ctrl+K)
+ - [ ] Split view: note list + editor
+ - [ ] Resizable panels
+ - [ ] Breadcrumb navigation
+ - [x] Keyboard shortcuts system
+ 
+ ### 4.2 Search & Discovery
+ - [x] Global search across all content
+ - [ ] Search filters (date, notebook, tags)
+ - [ ] Recent notes quick access
+ - [ ] Favorite / pinned notes
+ - [ ] Backlinks (notes that reference this note)
 
 ### 4.3 Themes & Appearance
 - [ ] Custom theme editor (create your own color scheme)
@@ -141,19 +154,19 @@
 - [ ] Selective export (by notebook, date range)
 
 ### 5.3 Templates
-- [ ] Note templates (daily journal, meeting notes, book notes)
-- [ ] Todo templates (project checklist, travel checklist)
-- [ ] Calendar templates (recurring meeting setup)
-- [ ] Custom template creation
-- [ ] Template marketplace (community shared)
-
-### 5.4 Media & Attachments
-- [ ] Inline image support (paste/drag-drop)
-- [ ] File attachment management UI
-- [ ] Image preview / lightbox
-- [ ] PDF viewer inline
-- [ ] Audio recording (voice notes)
-- [ ] Screen capture integration
+ - [x] Note templates (daily journal, meeting notes, book notes)
+ - [ ] Todo templates (project checklist, travel checklist)
+ - [ ] Calendar templates (recurring meeting setup)
+ - [ ] Custom template creation
+ - [ ] Template marketplace (community shared)
+ 
+ ### 5.4 Media & Attachments
+ - [ ] Inline image support (paste/drag-drop)
+ - [x] File attachment management UI
+ - [x] Image preview / lightbox
+ - [ ] PDF viewer inline
+ - [ ] Audio recording (voice notes)
+ - [ ] Screen capture integration
 
 ---
 
