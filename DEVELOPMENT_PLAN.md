@@ -58,6 +58,7 @@
  - [x] Key rotation mechanism (re-encrypt with new master password)
  - [ ] Key backup export (encrypted keychain file)
  - [ ] Secure memory wiping (zeroize on drop for all key material)
+<<<<<<< HEAD
 
 ### 2.2 Authentication Hardening
 - [ ] Account lockout after N failed attempts
@@ -116,6 +117,66 @@
  - [ ] Search filters (date, notebook, tags)
  - [ ] Recent notes quick access
  - [ ] Favorite / pinned notes
+=======
+ 
+ ### 2.2 Authentication Hardening
+ - [ ] Account lockout after N failed attempts
+ - [ ] Two-factor authentication (TOTP)
+ - [ ] Recovery codes
+ - [ ] Hardware key support (WebAuthn/FIDO2)
+ - [ ] Biometric unlock (Windows Hello / macOS Touch ID)
+ 
+ ### 2.3 Data Integrity
+ - [x] SQLite WAL checkpoint on app exit
+ - [ ] Automatic database backup on startup
+ - [ ] Backup rotation (keep last N)
+ - [x] Database integrity check (PRAGMA integrity_check)
+ - [ ] Corruption recovery (export + re-create)
+ 
+ ---
+ 
+ ## Phase 3: Sync & Multi-Device (Weeks 5-6)
+ 
+ ### 3.1 Sync Implementation
+ - [x] Full Supabase sync implementation (replace stubs)
+ - [x] Push: upload local changes since last sync
+ - [x] Pull: download remote changes, merge locally
+ - [x] Conflict resolution UI (when CRDT merge is ambiguous)
+ - [ ] Sync status indicator in UI
+ - [ ] Manual sync trigger + auto-sync interval
+ - [ ] Bandwidth-efficient delta sync (only changed fields)
+ 
+ ### 3.2 Multi-Device
+ - [ ] Device registration (name, type, last seen)
+ - [ ] Device management UI (list devices, revoke access)
+ - [ ] Cross-device encryption key sync
+ - [ ] Selective sync (choose which notebooks to sync)
+ - [ ] Sync logs (history of sync operations)
+ 
+ ### 3.3 Offline-First
+ - [ ] Queue sync operations when offline
+ - [ ] Auto-retry on network reconnect
+ - [ ] Sync conflict detection with user notification
+ - [ ] Merge strategy: local-wins vs remote-wins vs user-prompt
+ 
+ ---
+ 
+ ## Phase 4: UI/UX Polish (Weeks 7-8)
+ 
+ ### 4.1 Layout
+ - [x] Sidebar navigation (collapsible)
+ - [x] Command palette (Cmd+K / Ctrl+K)
+ - [ ] Split view: note list + editor
+ - [ ] Resizable panels
+ - [ ] Breadcrumb navigation
+ - [x] Keyboard shortcuts system
+ 
+ ### 4.2 Search & Discovery
+ - [x] Global search across all content
+ - [ ] Search filters (date, notebook, tags)
+ - [ ] Recent notes quick access
+ - [ ] Favorite / pinned notes
+>>>>>>> humane-port
  - [ ] Backlinks (notes that reference this note)
 
 ### 4.3 Themes & Appearance

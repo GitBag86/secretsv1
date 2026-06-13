@@ -243,4 +243,18 @@ pub async fn refresh_session(pool: State<'_, DbPool>, enc: State<'_, EncryptionM
 }
 
 #[tauri::command]
+pub async fn check_database_integrity(pool: State<'_, DbPool>) -> Result<String, String> {
+    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    let result: String = conn.query_row("PRAGMA integrity_check;", [], |r| r.get(0)).map_err(|e| e.to_string())?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn wal_checkpoint(pool: State<'_, DbPool>) -> Result<(), String> {
+    let conn = pool.get().await.map_err(|e| e.to_string())?;
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE);", []).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn logout() -> Result<(), String> { Ok(()) }
