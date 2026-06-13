@@ -3,10 +3,10 @@
  ## Phase 1: Core Polish (Weeks 1-2)
  
  ### 1.1 Auth Flow UI
- - [ ] Login page (`/login`)
- - [ ] Register page (`/register`)
- - [ ] Database unlock screen (`/unlock`)
- - [ ] Password strength indicator
+ - [x] Login page (`/login`)
+ - [x] Register page (`/register`)
+ - [x] Database unlock screen (`/unlock`)
+ - [x] Password strength indicator
  - [x] Session persistence (keep unlocked for N minutes)
  - [x] Auto-lock on idle
  
@@ -15,7 +15,7 @@
  - [x] Note ↔ notebook assignment
  - [x] Note filtering by notebook
  - [x] Drag-and-drop note reordering
- - [ ] Markdown export
+ - [x] Markdown export
  - [ ] Rich text image embedding (inline images via Tauri file picker)
  - [ ] Note version history (snapshot on save)
  
