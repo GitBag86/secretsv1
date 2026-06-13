@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { createElement } from "react";
 
@@ -14,6 +14,18 @@ vi.mock("@fullcalendar/core", () => ({}));
 
 // Mock Tauri API
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+
+// Mock api.sync for nav-header sync indicator
+vi.mock("@/lib/api", () => ({
+  api: {
+    sync: { status: () => Promise.resolve({ pending: 0, last_sync: null, configured: false }) },
+    notes: { list: () => Promise.resolve([]) },
+    todos: { list: () => Promise.resolve([]) },
+    notebooks: { list: () => Promise.resolve([]) },
+    calendar: { list: () => Promise.resolve([]) },
+    tags: { list: () => Promise.resolve([]) },
+  },
+}));
 
 // Mock next/navigation for SearchPalette (rendered inside NavHeader)
 vi.mock("next/navigation", () => ({

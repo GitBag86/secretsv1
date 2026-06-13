@@ -1,6 +1,7 @@
 "use client";
 import { useAuth } from "@/hooks";
-import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { SearchPalette } from "./search-palette";
 
@@ -8,7 +9,22 @@ export function NavHeader() {
   const { user, isUnlocked, lock, sessionElapsed, sessionMinutes } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [syncPending, setSyncPending] = useState(0);
+  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!isUnlocked) return;
+    api.sync.status().then((s) => setSyncPending(s.pending)).catch(() => {});
+    
+    syncIntervalRef.current = setInterval(() => {
+      api.sync.status().then((s) => setSyncPending(s.pending)).catch(() => {});
+    }, 30000);
+    
+    return () => {
+      if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
+    };
+  }, [isUnlocked]);
 
   const isActive = (path: string) => {
     if (typeof window === "undefined") return false;
@@ -31,13 +47,18 @@ export function NavHeader() {
           <Link href="/settings" className={`text-sm font-medium ${isActive("/settings") ? "text-primary" : "hover:text-primary"}`}>Settings</Link>
           <Link href="/trash" className={`text-sm font-medium ${isActive("/trash") ? "text-primary" : "hover:text-primary"}`}>Trash</Link>
         </nav>
-        <div className="flex items-center gap-2">
-          {mounted && isUnlocked && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="tabular-nums hidden sm:inline">{Math.max(0, Math.floor(remaining / 60))}:{String(Math.max(0, remaining % 60)).padStart(2, "0")}</span>
-              <button onClick={lock} className="hover:text-foreground" title="Lock database">🔒</button>
-            </div>
-          )}
+<div className="flex items-center gap-2">
+           {mounted && isUnlocked && (
+             <div className="flex items-center gap-2 text-xs text-muted-foreground">
+               {syncPending > 0 && (
+                 <span className="text-primary font-medium" title={`${syncPending} pending sync`}>
+                   ↻ {syncPending}
+                 </span>
+               )}
+               <span className="tabular-nums hidden sm:inline">{Math.max(0, Math.floor(remaining / 60))}:{String(Math.max(0, remaining % 60)).padStart(2, "0")}</span>
+               <button onClick={lock} className="hover:text-foreground" title="Lock database">🔒</button>
+             </div>
+           )}
           {/* Mobile menu button */}
           <button
             onClick={() => setMobileOpen(!mobileOpen)}

@@ -1,8 +1,25 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
+
+// Mock api for nav-header sync indicator
+vi.mock("@/lib/api", () => ({
+  api: {
+    sync: { status: () => Promise.resolve({ pending: 0, last_sync: null, configured: false }) },
+    notes: { list: () => Promise.resolve([]) },
+    todos: { list: () => Promise.resolve([]) },
+    notebooks: { list: () => Promise.resolve([]) },
+    calendar: { list: () => Promise.resolve([]) },
+    tags: {
+      list: () => Promise.resolve([]),
+      listAllTodoTags: () => Promise.resolve([]),
+      listAllNoteTags: () => Promise.resolve([]),
+    },
+    recurringTodos: { list: () => Promise.resolve([]) },
+  },
+}));
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
