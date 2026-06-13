@@ -1,6 +1,6 @@
 "use client";
 import { useNotebooks, useNotes } from "@/hooks";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 const defaultColors = ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#a855f7", "#ec4899"];
 
@@ -10,6 +10,7 @@ export function NotebookSidebar({ activeNotebook, onSelect }: { activeNotebook: 
   const [name, setName] = useState("");
   const [color, setColor] = useState(defaultColors[0]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
   const dragIdx = useRef<number | null>(null);
 
   const handleCreate = async () => {
