@@ -48,7 +48,7 @@
  - [x] Secure memory wiping (zeroize on drop for all key material)
  
  ### 2.2 Authentication Hardening
- - [ ] Account lockout after N failed attempts
+ - [x] Account lockout after N failed attempts (RateLimiter: 5 attempts / 15 min)
  - [ ] Two-factor authentication (TOTP)
  - [ ] Recovery codes
  - [ ] Hardware key support (WebAuthn/FIDO2)
@@ -149,7 +149,7 @@
  - [ ] Template marketplace (community shared)
  
  ### 5.4 Media & Attachments
- - [ ] Inline image support (paste/drag-drop)
+ - [x] Inline image support (paste/drag-drop)
  - [x] File attachment management UI
  - [x] Image preview / lightbox
  - [ ] PDF viewer inline
@@ -181,7 +181,7 @@
  ### 6.3 CI/CD
  - [ ] GitHub Actions workflow
  - [ ] Lint on PR (ESLint + Clippy + Prettier + rustfmt)
- - [ ] Test on PR (unit + integration)
+ - [x] Test on PR (unit + integration)
  - [ ] Build on main (Tauri builds for Windows/macOS/Linux)
  - [ ] Release automation (semantic-release + GitHub Releases)
  - [ ] Auto-update mechanism (Tauri updater plugin)
@@ -192,7 +192,7 @@
  - [ ] Contributing guidelines
  - [ ] Architecture Decision Records (ADRs)
  - [ ] User guide with screenshots
- - [ ] Keyboard shortcuts reference
+ - [x] Keyboard shortcuts reference
  
  ---
  
