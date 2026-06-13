@@ -97,6 +97,8 @@ pub fn run() {
             commands::archive::list_archived_todos,
             commands::archive::permanently_delete_todo,
             commands::archive::unified_search,
+            commands::auth::check_database_integrity,
+            commands::auth::wal_checkpoint,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

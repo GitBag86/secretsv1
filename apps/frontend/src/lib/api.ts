@@ -15,6 +15,8 @@ export const api = {
     getSessionTimeout: () => invoke<number>("get_session_timeout"),
     setSessionTimeout: (minutes: number) => invoke<void>("set_session_timeout", { minutes }),
     refreshSession: () => invoke<{ refreshed_at: number }>("refresh_session"),
+    checkIntegrity: () => invoke<string>("check_database_integrity"),
+    walCheckpoint: () => invoke<void>("wal_checkpoint"),
   },
   notes: {
     list: () => invoke<Note[]>("list_notes"),
@@ -28,7 +30,7 @@ export const api = {
   },
   todos: {
     list: () => invoke<Todo[]>("list_todos"),
-    create: (data: { title: string; description?: string; priority?: string; due_date?: number; id?: string; is_completed?: boolean }) =>
+    create: (data: { title: string; description?: string; priority?: string; due_date?: number; note_id?: string; id?: string; is_completed?: boolean }) =>
       invoke<Todo>("create_todo", data),
     update: (id: string, data: Partial<Todo>) =>
       invoke<Todo>("update_todo", { id, ...data }),

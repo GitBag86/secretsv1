@@ -55,10 +55,10 @@
  - [ ] Biometric unlock (Windows Hello / macOS Touch ID)
  
  ### 2.3 Data Integrity
- - [ ] SQLite WAL checkpoint on app exit
+ - [x] SQLite WAL checkpoint on app exit
  - [ ] Automatic database backup on startup
  - [ ] Backup rotation (keep last N)
- - [ ] Database integrity check (PRAGMA integrity_check)
+ - [x] Database integrity check (PRAGMA integrity_check)
  - [ ] Corruption recovery (export + re-create)
  
  ---
