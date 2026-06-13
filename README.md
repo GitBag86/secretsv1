@@ -55,7 +55,9 @@ A desktop application for managing notes, todos, and calendar events with end-to
 | Database | SQLite (rusqlite) | 0.32 (bundled) |
 | Encryption | AES-256-GCM | — |
 | KDF | Argon2id | 0.5 |
-| Backend | Rust | 1.96+ |
+ | Backend | Rust | 1.96+ |
+ 
+ > **Note:** 20 migrations covering full schema evolution.
 
 ## Project Structure
 
@@ -125,40 +127,43 @@ docker compose up --build
 ## Features
 
 ### Implemented
-
-- **Notes** — Create, edit, delete with rich text (TipTap), word count, reading time
-- **Todos** — CRUD with priority levels (high/medium/low), due dates, completion toggle
-- **Calendar** — FullCalendar integration, day/week/month views, drag-and-drop rescheduling
-- **Authentication** — User registration, password login, database unlock
-- **Encryption** — AES-256-GCM content encryption, Argon2id password hashing, per-entity key derivation
-- **Sync** — Supabase REST client with push/pull, CRDT vector clocks for conflict resolution
-- **Search** — FTS5 full-text search index over notes
-- **Tags** — Many-to-many tag system for notes
-- **Attachments** — File attachment metadata storage
-- **Recurring Todos** — Recurrence rule storage
-- **Dark/Light Theme** — CSS variables with `next-themes`
-- **Docker Deployment** — Web-only nginx container
+ 
+ - **Notes** — Create, edit, delete with rich text (TipTap), undo/redo, link extension, word count, reading time
+ - **Todos** — CRUD with priority levels (high/medium/low), due dates, completion toggle, bulk select/delete
+ - **Calendar** — FullCalendar integration, day/week/month views, drag-and-drop rescheduling, event resize
+ - **Authentication** — User registration, password login, database unlock
+ - **Encryption** — AES-256-GCM content encryption, Argon2id password hashing, secure key derivation
+ - **Sync** — Supabase REST client with push/pull, CRDT vector clocks for conflict resolution
+ - **Search** — Unified search across notes/todos/events with deep-linking
+ - **Tags** — Many-to-many tag system for notes
+ - **Attachments** — Encrypted file storage with preview thumbnails
+ - **Recurring Todos** — Recurrence rule storage and advancement
+ - **Keyboard Shortcuts** — Ctrl+E (new note), Ctrl+S (save), Ctrl+Shift+F (search)
+ - **Dark/Light Theme** — CSS variables with `next-themes`
+ - **Export/Import** — Filtered export with notebook and tag selection
+ - **Docker Deployment** — Web-only nginx container
 
 ### Database Schema
 
 14 migrations covering:
 
 | Migration | Purpose |
-|-----------|---------|
-| 001 | Users (id, email, password_hash) |
-| 002 | Notebooks (color, sort_order) |
-| 003 | Notes (encrypted_content, word_count, reading_time) |
-| 004 | Todos (priority CHECK, due_date) |
-| 005 | Calendar events (start/end, all_day, color) |
-| 006 | Tags (unique user+name) |
-| 007 | Note-tag junction table |
-| 008 | FTS5 full-text search index |
-| 009 | Encryption keys (salt, algorithm) |
-| 010 | Sync queue (vector_clock, synced flag) |
-| 011 | Attachments (file_path, mime_type, size) |
-| 012 | App settings (key-value store) |
-| 013 | Device registry |
-| 014 | Recurring todos (freq, interval, until) |
+ |-----------|---------|
+ | 001 | Users (id, email, password_hash) |
+ | 002 | Notebooks (color, sort_order) |
+ | 003 | Notes (encrypted_content, word_count, reading_time) |
+ | 004 | Todos (priority CHECK, due_date) |
+ | 005 | Calendar events (start/end, all_day, color) |
+ | 006 | Tags (unique user+name) |
+ | 007 | Note-tag junction table |
+ | 008 | FTS5 full-text search index |
+ | 009 | Encryption keys (salt, algorithm) |
+ | 010 | Sync queue (vector_clock, synced flag) |
+ | 011 | Attachments (file_path, mime_type, size) |
+ | 012 | App settings (key-value store) |
+ | 013 | Device registry |
+ | 014 | Recurring todos (freq, interval, until) |
+ | 015-020 | Additional schema enhancements |
 
 ## Security
 

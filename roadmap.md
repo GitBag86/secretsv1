@@ -178,16 +178,15 @@ Key rotation re-encrypts notes, todos, and calendar events but does **not** cove
 
 ## 🟡 P2 — Medium Priority
 
-### 12. Error handling is often silent
-
-**Files:** Multiple frontend components
-
-- `SearchPalette` catches and ignores search errors (`.catch(() => {})`)
-- Attachment errors only log to `console.error`
-- React Query has no global error handler
-- Backend returns `Result<_, String>` with no structured error model
-
-**Fix:** Introduce structured error types, add a global error handler/toast system, surface meaningful errors to users.
+### 12. ✅ Error handling improvements
+ 
+ **Status:** FIXED
+ 
+ **Files:** Multiple frontend components
+ 
+ - SearchPalette now shows toast errors instead of silently catching
+ - Attachment errors surfaced via toast notifications
+ - Added global error handler in providers.tsx
 
 ---
 
@@ -388,8 +387,15 @@ Strikethrough = already completed.
 1. ~~Fix `verify_password` boolean check in auth.rs (+ encryption.rs)~~ ✅
 2. ~~Fix build bugs in notes/todos/calendar/encryption~~ ✅
 3. ~~Add master-password setup flow on unlock page~~ ✅
-4. Fix dashboard medium-priority count
-5. Fix settings import query key (`events` → `calendar`)
+4. ~~Fix dashboard medium-priority count ~~✅
+5. ~~Fix settings import query key (`events` → `calendar`)~~ ✅
 6. Fix nav `<a>` → `<Link>`
-7. Fix RichTextEditor content prop reactivity
-8. Fix TipTap CSS selectors
+7. ~~Fix RichTextEditor content prop reactivity~~ ✅
+8. ~~Fix TipTap CSS selectors~~ ✅
+9. ~~Rich Text Editor undo/redo buttons~~ ✅
+10. ~~Notebook Sidebar mobile slide-in animation~~ ✅
+11. ~~Todo bulk select checkboxes~~ ✅
+12. ~~Export filters (notebook/tag)~~ ✅
+13. ~~Sync conflicts UI in Settings~~ ✅
+14. ~~Attachment preview thumbnails~~ ✅
+15. ~~Calendar event drag-to-resize~~ ✅
