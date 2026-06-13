@@ -1,9 +1,0 @@
-
-> frontend@1.0.0 lint /home/dakos/DATABAZA/secretsv1/.kilo/worktrees/humane-port/apps/frontend
-> next lint
-
-? How would you like to configure ESLint? https://nextjs.org/docs/basic-features/eslint
-[?25l❯  Strict (recommended)
-   Base
- ⚠ If you set up ESLint yourself, we recommend adding the Next.js ESLint plugin. See https://nextjs.org/docs/basic-features/eslint#migrating-existing-config
-   Cancel ELIFECYCLE  Command failed with exit code 1.
