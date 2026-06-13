@@ -66,6 +66,31 @@ pub async fn get_encryption_salt(pool: State<'_, DbPool>) -> Result<Option<Strin
     }
 }
 
+/// Export encryption key backup (encrypted with password-derived key).
+#[tauri::command]
+pub async fn export_key_backup(enc: State<'_, EncryptionManager>, backup_password: String) -> Result<String, String> {
+    let key = enc.get_key_copy().await.ok_or_else(|| "Database locked, cannot export key backup".to_string())?;
+    // Derive a key from the backup password for encrypting the backup
+    let backup_key = crypto::key_derivation::derive_key_sha256(&backup_password, &[0u8; 16]);
+    let encrypted = crypto::aes_gcm::encrypt(&backup_key.0, &key)?;
+    Ok(hex::encode(encrypted))
+}
+
+/// Import encryption key backup.
+#[tauri::command]
+pub async fn import_key_backup(enc: State<'_, EncryptionManager>, backup_data: String, backup_password: String) -> Result<(), String> {
+    let raw = hex::decode(&backup_data).map_err(|e| e.to_string())?;
+    let backup_key = crypto::key_derivation::derive_key_sha256(&backup_password, &[0u8; 16]);
+    let key = crypto::aes_gcm::decrypt(&backup_key.0, &raw)?;
+    if key.len() != 32 {
+        return Err("Invalid backup data: incorrect length".to_string());
+    }
+    let mut key_arr = [0u8; 32];
+    key_arr.copy_from_slice(&key);
+    *enc.key.lock().await = Some(key_arr);
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn rotate_encryption_key(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, current_password: String, new_password: String) -> Result<serde_json::Value, String> {
     helpers::require_valid_session(&pool, &enc).await?;

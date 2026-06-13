@@ -54,6 +54,8 @@ export const api = {
     getSalt: () => invoke<string | null>("get_encryption_salt"),
     rotate: (currentPassword: string, newPassword: string) =>
       invoke<{ rotated: boolean; notes: number; todos: number; events: number; attachments: number }>("rotate_encryption_key", { currentPassword, newPassword }),
+    exportKeyBackup: (backupPassword: string) => invoke<string>("export_key_backup", { backupPassword }),
+    importKeyBackup: (backupData: string, backupPassword: string) => invoke<void>("import_key_backup", { backupData, backupPassword }),
   },
   notebooks: {
     list: () => invoke<Notebook[]>("list_notebooks"),
