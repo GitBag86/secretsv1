@@ -5,6 +5,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Link from "@tiptap/extension-link";
+import Image from "@tiptap/extension-image";
 import { useEffect, useRef, useState, useCallback } from "react";
 
 interface RichTextEditorProps {
@@ -15,6 +16,7 @@ interface RichTextEditorProps {
   minHeight?: string;
   maxHeight?: string;
   showResizeHandle?: boolean;
+  onImageUpload?: (file: File) => Promise<string>;
 }
 
 export function RichTextEditor({
@@ -25,6 +27,7 @@ export function RichTextEditor({
   minHeight = "200px",
   maxHeight,
   showResizeHandle = false,
+  onImageUpload,
 }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
@@ -33,6 +36,7 @@ export function RichTextEditor({
       TaskList,
       TaskItem.configure({ nested: true }),
       Link.configure({ openOnClick: false }),
+      Image.configure({ inline: false }),
     ],
     content,
     editable,
@@ -99,6 +103,19 @@ export function RichTextEditor({
     editor.chain().focus().setLink({ href: url }).run();
   }, [editor]);
 
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editor || !onImageUpload) return;
+    try {
+      const url = await onImageUpload(file);
+      editor.chain().focus().setImage({ src: url }).run();
+    } catch (err) {
+      console.error("Image upload failed:", err);
+    }
+    if (e.target) e.target.value = "";
+  }, [editor, onImageUpload]);
+
   if (!editor) return null;
 
   return (
@@ -125,7 +142,19 @@ export function RichTextEditor({
         <ToolBtn onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive("taskList")} label="☑" />
         <ToolBtn onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} label="❝" />
         <ToolBtn onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} label="{}" />
-        <span className="w-px bg-border mx-1" />
+        {onImageUpload && (
+          <>
+            <span className="w-px bg-border mx-1" />
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+            <ToolBtn onClick={() => imageInputRef.current?.click()} active={false} label="🖼️" />
+          </>
+        )}
         <ToolBtn onClick={setLink} active={editor.isActive("link")} label="🔗" />
       </div>
       <EditorContent editor={editor} className="prose prose-sm dark:prose-invert max-w-none p-3 [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[150px] overflow-y-auto" style={{ height: `calc(${height} - 42px)` }} />

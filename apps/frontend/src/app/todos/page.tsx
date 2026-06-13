@@ -1,6 +1,6 @@
 "use client";
 import { AuthGuard } from "@/components/auth-guard";
-import { useTodos, useTags } from "@/hooks";
+import { useTodos, useTags, useNotes, useNotebooks } from "@/hooks";
 import { NavHeader } from "@/components/nav-header";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -33,8 +33,11 @@ const priorityOrder = { high: 0, medium: 1, low: 2 };
 
 export default function TodosPage() {
   const { todos, isLoading, create, update, remove, bulkUpdate, bulkDelete, refresh } = useTodos();
+  const { notes } = useNotes();
+  const { notebooks } = useNotebooks();
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
+  const [selectedNoteId, setSelectedNoteId] = useState<string>("");
   const [filter, setFilter] = useState<FilterMode>("all");
   const [sort, setSort] = useState<SortMode>("created");
   const [search, setSearch] = useState("");
@@ -79,8 +82,9 @@ export default function TodosPage() {
 
   const handleCreate = async () => {
     if (!title.trim()) return;
-    await create.mutateAsync({ title, priority });
+    await create.mutateAsync({ title, priority, note_id: selectedNoteId || undefined });
     setTitle("");
+    setSelectedNoteId("");
   };
 
   const toggleTodo = (id: string, is_completed: boolean) => {
@@ -178,6 +182,12 @@ export default function TodosPage() {
               <option value="medium">Medium</option>
               <option value="high">High</option>
             </select>
+            <select value={selectedNoteId} onChange={(e) => setSelectedNoteId(e.target.value)} className="flex-1 p-2 border rounded-md bg-background">
+              <option value="">No note link</option>
+              {notes.map((note) => (
+                <option key={note.id} value={note.id}>{note.title}</option>
+              ))}
+            </select>
             <button onClick={handleCreate} disabled={create.isPending} className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90">
               Add
             </button>
@@ -273,34 +283,37 @@ export default function TodosPage() {
           <div className="space-y-1.5">
             {filtered.map((todo) => (
               <div key={todo.id} className="rounded-lg border bg-card p-3 sm:p-3.5 shadow-sm">
-                <div className="flex items-start sm:items-center gap-2 sm:gap-3">
-                  <input
-                       type="checkbox"
-                       checked={selectedIds.has(todo.id)}
-                       onChange={(e) => {
-                         e.stopPropagation();
-                         const newSet = new Set(selectedIds);
-                         if (e.target.checked) {
-                           newSet.add(todo.id);
-                         } else {
-                           newSet.delete(todo.id);
-                         }
-                         setSelectedIds(newSet);
-                       }}
-                       onClick={(e) => e.stopPropagation()}
-                       className="h-4 w-4"
-                       title="Select for bulk action"
-                     />
-                     <input type="checkbox" checked={todo.is_completed} onChange={() => toggleTodo(todo.id, todo.is_completed)} className="h-4 w-4" />
-                  <div className="flex-1 min-w-0">
-                    <p className={`font-medium truncate ${todo.is_completed ? "line-through text-muted-foreground" : ""}`}>{todo.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      {todo.due_date && (
-                        <p className={`text-xs ${todo.due_date < Date.now() / 1000 && !todo.is_completed ? "text-destructive" : "text-muted-foreground"}`}>
-                          Due {new Date(todo.due_date * 1000).toLocaleDateString()}
-                        </p>
-                      )}
-                      {(todoTagMap.get(todo.id) || []).map((tagId) => {
+<div className="flex items-start sm:items-center gap-2 sm:gap-3">
+                   <input
+                        type="checkbox"
+                        checked={selectedIds.has(todo.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const newSet = new Set(selectedIds);
+                          if (e.target.checked) {
+                            newSet.add(todo.id);
+                          } else {
+                            newSet.delete(todo.id);
+                          }
+                          setSelectedIds(newSet);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4"
+                        title="Select for bulk action"
+                      />
+                      <input type="checkbox" checked={todo.is_completed} onChange={() => toggleTodo(todo.id, todo.is_completed)} className="h-4 w-4" />
+                   <div className="flex-1 min-w-0">
+                     <p className={`font-medium truncate ${todo.is_completed ? "line-through text-muted-foreground" : ""}`}>{todo.title}</p>
+                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                       {todo.due_date && (
+                         <p className={`text-xs ${todo.due_date < Date.now() / 1000 && !todo.is_completed ? "text-destructive" : "text-muted-foreground"}`}>
+                           Due {new Date(todo.due_date * 1000).toLocaleDateString()}
+                         </p>
+                       )}
+                       {todo.note_id && (
+                         <span className="text-xs text-muted-foreground" title="Linked note">Note: {notes.find(n => n.id === todo.note_id)?.title.substring(0, 20) || "..."}</span>
+                       )}
+                       {(todoTagMap.get(todo.id) || []).map((tagId) => {
                         const tag = tagMap.get(tagId);
                         if (!tag) return null;
                         return (

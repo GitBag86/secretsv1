@@ -2,8 +2,14 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+vi.mock("@tanstack/react-query", async () => {
+  const actual = await vi.importActual("@tanstack/react-query");
+  return { ...actual, useQuery: vi.fn(() => ({ data: [] })) };
+});
 
 // Mock Tauri API
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -34,6 +40,20 @@ vi.mock("@/hooks", () => ({
     unlock: vi.fn(),
     setupMasterPassword: vi.fn(),
     bootstrap: vi.fn(),
+  }),
+  useNotes: () => ({
+    notes: [],
+    isLoading: false,
+    create: { mutateAsync: vi.fn(), isPending: false },
+    update: { mutateAsync: vi.fn(), isPending: false },
+    remove: { mutateAsync: vi.fn() },
+  }),
+  useNotebooks: () => ({
+    notebooks: [],
+    isLoading: false,
+    create: { mutateAsync: vi.fn(), isPending: false },
+    update: { mutateAsync: vi.fn(), isPending: false },
+    remove: { mutateAsync: vi.fn() },
   }),
   useTags: () => ({
     tags: [],

@@ -16,11 +16,11 @@
  - [x] Note filtering by notebook
  - [x] Drag-and-drop note reordering
  - [x] Markdown export
- - [ ] Rich text image embedding (inline images via Tauri file picker)
+ - [x] Rich text image embedding (inline images via Tauri file picker)
  - [ ] Note version history (snapshot on save)
  
  ### 1.3 Todos Enhancement
- - [ ] Todo ↔ note linking
+ - [x] Todo ↔ note linking
  - [x] Subtask support
  - [x] Todo lists / checklists
  - [x] Filter by priority / due date / completion
@@ -32,7 +32,7 @@
  - [x] Event categories / color coding
  - [x] Week number display
  - [x] Today button + keyboard navigation
- - [ ] Event drag from notes/todos
+ - [x] Event drag from notes/todos
  - [x] Event resize (drag-to-resize)
  
  ---
