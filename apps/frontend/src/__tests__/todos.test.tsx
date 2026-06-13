@@ -95,4 +95,10 @@ describe("Todos page", () => {
     expect(screen.getByText("high")).toBeDefined();
     expect(screen.getByText("low")).toBeDefined();
   });
+
+  it("has note selector for todo-note linking", () => {
+    render(createElement(QueryClientProvider, { client: queryClient }, createElement(TodosPage)));
+    const selectors = screen.getAllByRole("combobox");
+    expect(selectors.length).toBeGreaterThanOrEqual(1);
+  });
 });
