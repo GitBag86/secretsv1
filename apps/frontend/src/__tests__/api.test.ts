@@ -154,21 +154,21 @@ describe("api.encryption", () => {
 
 describe("api.sync", () => {
   it("push calls sync_push", async () => {
-    mockInvoke.mockResolvedValue({ synced: 5 });
+    mockInvoke.mockResolvedValue({ pushed: 5, total: 5, remaining: 0, errors: [] });
     const result = await api.sync.push();
     expect(mockInvoke).toHaveBeenCalledWith("sync_push");
-    expect(result.synced).toBe(5);
+    expect(result.pushed).toBe(5);
   });
 
   it("pull calls sync_pull", async () => {
-    mockInvoke.mockResolvedValue({ synced: 3 });
+    mockInvoke.mockResolvedValue({ pulled: 3, pending: 0, errors: [] });
     const result = await api.sync.pull();
     expect(mockInvoke).toHaveBeenCalledWith("sync_pull");
-    expect(result.synced).toBe(3);
+    expect(result.pulled).toBe(3);
   });
 
   it("status calls sync_status", async () => {
-    mockInvoke.mockResolvedValue({ pending: 2, last_sync: 1700000000 });
+    mockInvoke.mockResolvedValue({ pending: 2, last_sync: 1700000000, configured: true });
     const result = await api.sync.status();
     expect(mockInvoke).toHaveBeenCalledWith("sync_status");
     expect(result.pending).toBe(2);

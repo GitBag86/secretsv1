@@ -152,13 +152,13 @@
  
  ## Phase 3: Sync & Multi-Device (Weeks 5-6)
  
- ### 3.1 Sync Implementation
- - [x] Full Supabase sync implementation (replace stubs)
- - [x] Push: upload local changes since last sync
- - [x] Pull: download remote changes, merge locally
- - [x] Conflict resolution UI (when CRDT merge is ambiguous)
- - [ ] Sync status indicator in UI
- - [ ] Manual sync trigger + auto-sync interval
+### 3.1 Sync Implementation
+- [x] Full Supabase sync implementation (replace stubs)
+- [x] Push: upload local changes since last sync
+- [x] Pull: download remote changes, merge locally
+- [x] Conflict resolution UI (when CRDT merge is ambiguous)
+- [x] Sync status indicator in UI
+- [x] Manual sync trigger + auto-sync interval
  - [ ] Bandwidth-efficient delta sync (only changed fields)
  
  ### 3.2 Multi-Device

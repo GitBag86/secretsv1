@@ -3,7 +3,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { NavHeader } from "@/components/nav-header";
 import { useAuth } from "@/hooks";
 import { api } from "@/lib/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -60,7 +60,7 @@ export default function SettingsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tags"] }),
   });
 
-  const tagCreate = useMutation({
+const tagCreate = useMutation({
     mutationFn: (data: { name: string; color?: string }) => api.tags.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
@@ -69,9 +69,32 @@ export default function SettingsPage() {
     },
   });
 
+  // Auto-sync interval
+  const [autoSyncMinutes, setAutoSyncMinutes] = useState(0);
+  const autoSyncRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!isUnlocked || !syncConfigured || autoSyncMinutes <= 0) return;
+
+    autoSyncRef.current = setInterval(() => {
+      if (syncPending > 0) {
+        api.sync.push().then((res) => {
+          setSyncPending(res.remaining || 0);
+        }).catch(() => {});
+      }
+      api.sync.pull().then(() => {
+        api.sync.status().then((s) => setSyncPending(s.pending)).catch(() => {});
+      }).catch(() => {});
+    }, autoSyncMinutes * 60 * 1000);
+
+    return () => {
+      if (autoSyncRef.current) clearInterval(autoSyncRef.current);
+    };
+  }, [isUnlocked, syncConfigured, autoSyncMinutes]);
+
   useEffect(() => setMounted(true), []);
 
-  // Load sync config on mount
+   // Load sync config on mount
   useEffect(() => {
     if (!isUnlocked) return;
     api.sync.status().then((s) => {
@@ -270,7 +293,7 @@ export default function SettingsPage() {
                 >
                   {configuring ? "Testing..." : "Save"}
                 </button>
-              </div>
+</div>
               {syncMessage && (
                 <p className={`text-xs ${syncMessage.includes("Error") || syncMessage.includes("Failed") ? "text-destructive" : "text-green-600"}`}>
                   {syncMessage}
@@ -280,6 +303,20 @@ export default function SettingsPage() {
                 <span className="text-muted-foreground">
                   {syncConfigured ? "✓ Configured" : "Not configured"}
                 </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">Auto-sync:</label>
+                <select
+                  value={autoSyncMinutes}
+                  onChange={(e) => setAutoSyncMinutes(Number(e.target.value))}
+                  className="p-1 text-xs border rounded-md bg-background"
+                >
+                  <option value={0}>Off</option>
+                  <option value={5}>5 min</option>
+                  <option value={15}>15 min</option>
+                  <option value={30}>30 min</option>
+                  <option value={60}>1 hour</option>
+                </select>
               </div>
               <div className="flex gap-2">
                 <button
