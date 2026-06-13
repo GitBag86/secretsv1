@@ -44,8 +44,8 @@
  - [x] Encrypt todo descriptions
  - [x] Encrypt calendar event descriptions
  - [x] Key rotation mechanism (re-encrypt with new master password)
- - [ ] Key backup export (encrypted keychain file)
- - [ ] Secure memory wiping (zeroize on drop for all key material)
+ - [x] Key backup export (encrypted keychain file)
+ - [x] Secure memory wiping (zeroize on drop for all key material)
  
  ### 2.2 Authentication Hardening
  - [ ] Account lockout after N failed attempts

@@ -2,6 +2,7 @@ use tokio::sync::Mutex;
 use sha2::{Sha256, Digest};
 use crate::crypto::aes_gcm;
 use crate::crypto::key_derivation;
+use zeroize::Zeroize;
 
 const ENC_PREFIX: &str = "$enc$";
 
@@ -37,8 +38,13 @@ impl EncryptionManager {
         *self.key.lock().await = Some(derived);
     }
 
+    /// Securely clear the encryption key from memory using zeroize.
     pub async fn clear_key(&self) {
-        *self.key.lock().await = None;
+        let mut guard = self.key.lock().await;
+        if let Some(ref mut k) = *guard {
+            k.zeroize();
+        }
+        *guard = None;
     }
 
     pub async fn is_locked(&self) -> bool {
@@ -104,9 +110,13 @@ impl EncryptionManager {
         secret
     }
 
-    /// Clear the session secret from memory (called on lock).
+    /// Securely clear the session secret from memory using zeroize.
     pub async fn clear_session_secret(&self) {
-        *self.session_secret.lock().await = None;
+        let mut guard = self.session_secret.lock().await;
+        if let Some(ref mut s) = *guard {
+            s.zeroize();
+        }
+        *guard = None;
     }
 
     /// Compute HMAC-SHA256 of a timestamp using the in-memory session secret.
