@@ -28,6 +28,7 @@ export interface Todo {
   is_completed: boolean;
   priority: "low" | "medium" | "high";
   due_date?: number;
+  note_id?: string;
   created_at: number;
   updated_at: number;
 }

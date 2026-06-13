@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Todo { pub id: String, pub user_id: String, pub title: String, pub description: Option<String>, pub is_completed: bool, pub priority: String, pub due_date: Option<i64>, pub created_at: i64, pub updated_at: i64 }
+pub struct Todo { pub id: String, pub user_id: String, pub title: String, pub description: Option<String>, pub is_completed: bool, pub priority: String, pub due_date: Option<i64>, pub note_id: Option<String>, pub created_at: i64, pub updated_at: i64 }
 
 fn validate_todo_title(title: &str) -> Result<(), String> {
     if title.is_empty() { return Err("Title cannot be empty".into()); }
@@ -28,10 +28,10 @@ fn validate_todo_description(desc: &str) -> Result<(), String> {
 pub async fn list_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>) -> Result<Vec<Todo>, String> {
     let mut todos = {
         let conn = pool.get().await.map_err(|e| e.to_string())?;
-        let mut stmt = conn.prepare("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos WHERE is_archived = 0 ORDER BY is_completed ASC").map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare("SELECT id, user_id, title, description, is_completed, priority, due_date, note_id, created_at, updated_at FROM todos WHERE is_archived = 0 ORDER BY is_completed ASC").map_err(|e| e.to_string())?;
         let mut result = Vec::new();
         let rows = stmt.query_map([], |r| {
-            Ok(Todo { id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?, description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0, priority: r.get(5)?, due_date: r.get(6)?, created_at: r.get(7)?, updated_at: r.get(8)? })
+            Ok(Todo { id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?, description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0, priority: r.get(5)?, due_date: r.get(6)?, note_id: r.get(7)?, created_at: r.get(8)?, updated_at: r.get(9)? })
         }).map_err(|e| e.to_string())?;
         for row in rows { if let Ok(t) = row { result.push(t); } }
         result
@@ -41,7 +41,7 @@ pub async fn list_todos(pool: State<'_, DbPool>, enc: State<'_, EncryptionManage
 }
 
 #[tauri::command]
-pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, description: Option<String>, priority: Option<String>, due_date: Option<i64>, id: Option<String>, is_completed: Option<bool>) -> Result<Todo, String> {
+pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, title: String, description: Option<String>, priority: Option<String>, due_date: Option<i64>, note_id: Option<String>, id: Option<String>, is_completed: Option<bool>) -> Result<Todo, String> {
     helpers::require_valid_session(&pool, &enc).await?;
     validate_todo_title(&title)?;
     if let Some(ref d) = description { validate_todo_description(d)?; }
@@ -57,15 +57,15 @@ pub async fn create_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     let now = chrono::Utc::now().timestamp();
     let conn = pool.get().await.map_err(|e| e.to_string())?;
     let ic = is_completed.unwrap_or(false);
-    conn.execute("INSERT INTO todos (id, user_id, title, description, is_completed, priority, due_date, is_archived, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,0,?8,?9)", (&id, &user_id, &et, &ed, ic as i64, &p, &due_date, now, now)).map_err(|e| e.to_string())?;
-    let payload = serde_json::json!({"id": &id, "title": &et, "description": &ed, "is_completed": ic, "priority": &p, "due_date": &due_date, "created_at": now, "updated_at": now});
+conn.execute("INSERT INTO todos (id, user_id, title, description, is_completed, priority, due_date, note_id, is_archived, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,0,?9,?10)", (&id, &user_id, &et, &ed, ic as i64, &p, &due_date, &note_id, now, now)).map_err(|e| e.to_string())?;
+     let payload = serde_json::json!({"id": &id, "title": &et, "description": &ed, "is_completed": ic, "priority": &p, "due_date": &due_date, "note_id": &note_id, "created_at": now, "updated_at": now});
     enqueue_sync(&conn, "todo", &id, "create", Some(&payload.to_string())).ok();
     drop(conn);
     Ok(Todo { id, user_id, title, description, is_completed: ic, priority: p, due_date, created_at: now, updated_at: now })
 }
 
 #[tauri::command]
-pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String, title: Option<String>, description: Option<String>, is_completed: Option<bool>, priority: Option<String>, due_date: Option<i64>) -> Result<Todo, String> {
+pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManager>, id: String, title: Option<String>, description: Option<String>, is_completed: Option<bool>, priority: Option<String>, due_date: Option<i64>, note_id: Option<String>) -> Result<Todo, String> {
     helpers::require_valid_session(&pool, &enc).await?;
     if let Some(ref t) = title { validate_todo_title(t)?; }
     if let Some(ref d) = description { validate_todo_description(d)?; }
@@ -78,8 +78,8 @@ pub async fn update_todo(pool: State<'_, DbPool>, enc: State<'_, EncryptionManag
     // Read existing todo, then drop conn BEFORE any async encryption work
     let existing = {
         let conn = pool.get().await.map_err(|e| e.to_string())?;
-        conn.query_row("SELECT id, user_id, title, description, is_completed, priority, due_date, created_at, updated_at FROM todos WHERE id = ?1", [&id], |r| {
-            Ok(Todo { id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?, description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0, priority: r.get(5)?, due_date: r.get(6)?, created_at: r.get(7)?, updated_at: r.get(8)? })
+        conn.query_row("SELECT id, user_id, title, description, is_completed, priority, due_date, note_id, created_at, updated_at FROM todos WHERE id = ?1", [&id], |r| {
+            Ok(Todo { id: r.get(0)?, user_id: r.get(1)?, title: r.get(2)?, description: r.get(3)?, is_completed: r.get::<_, i64>(4)? != 0, priority: r.get(5)?, due_date: r.get(6)?, note_id: r.get(7)?, created_at: r.get(8)?, updated_at: r.get(9)? })
         }).map_err(|e| e.to_string())?
     }; // conn dropped here — Mutex released before async encryption
     let stored_t = if let Some(ref nt) = title { enc.encrypt_or_pass(nt).await.map_err(|e| e.to_string())? } else { existing.title.clone() };

@@ -5,7 +5,7 @@ import { NotebookSidebar } from "@/components/notebook-sidebar";
 import { NavHeader } from "@/components/nav-header";
 import { TemplatePicker } from "@/components/template-picker";
 import { RichTextEditor } from "@/components/rich-text-editor";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Note } from "@/types";
@@ -50,6 +50,18 @@ export default function NotesPage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attaching, setAttaching] = useState(false);
+
+  const handleEditorImageUpload = useCallback(async (file: File): Promise<string> => {
+    const arrayBuf = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuf);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const base64 = btoa(binary);
+    if (!editingNote) throw new Error("No note selected");
+    await api.attachments.attach(editingNote.id, file.name, file.type, base64);
+    invalidateAttachmentQueries();
+    return `data:${file.type};base64,${base64}`;
+  }, [editingNote]);
 
   const { data: noteAttachments = [] } = useQuery({
     queryKey: ["note-attachments", editingNote?.id],
@@ -339,7 +351,7 @@ export default function NotesPage() {
               <button onClick={() => exportNote(editingNote)} className="text-xs border px-2 py-1 rounded hover:bg-accent">Export Markdown</button>
             </div>
             <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Note title..." className="w-full mb-3 p-2 border rounded-md bg-background" />
-            <RichTextEditor content={editContent} onChange={setEditContent} placeholder="Write your note..." />
+            <RichTextEditor content={editContent} onChange={setEditContent} placeholder="Write your note..." onImageUpload={handleEditorImageUpload} />
 
             {/* Tags */}
             <div className="mt-4 border rounded-md p-3 bg-muted/20">
