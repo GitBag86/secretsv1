@@ -411,7 +411,7 @@
  - [ ] Contributing guidelines
  - [ ] Architecture Decision Records (ADRs)
  - [ ] User guide with screenshots
- - [x] Keyboard shortcuts reference
+ - [x] Keyboard shortcuts reference (in notes page: Ctrl+E, Ctrl+S, Ctrl+Shift+F)
  
  ---
  
@@ -433,10 +433,10 @@
  
  ## Technical Debt to Address
  
- 1. **Replace stub sync code** — Supabase client implementation complete
- 2. **Error boundaries** — Frontend error handling improved with toast notifications
+ 1. ~~Replace stub sync code~~ — Supabase client implementation complete
+ 2. ~~Error boundaries~~ — Frontend error handling improved with toast notifications
  3. **Type safety** — Some Tauri commands use `String` for IDs instead of typed IDs
- 4. **Database migrations** — No migration rollback support
+ 4. **Database migrations** — No migration rollback support (21 migrations exist)
  5. **Logging** — No structured logging in Rust backend
  6. **Config management** — No runtime configuration (hardcoded values)
  7. **Icon generation** — Placeholder icons need real design
